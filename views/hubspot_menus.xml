@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_hubspot_root"
+              name="HubSpot"
+              parent="account.menu_finance_configuration"
+              sequence="90"
+              groups="hubspot_invoice_bridge.group_hubspot_manager"/>
+
+    <menuitem id="menu_hubspot_events"
+              name="Eventos recibidos"
+              parent="menu_hubspot_root"
+              action="hubspot_webhook_event_action"
+              sequence="10"/>
+
+    <menuitem id="menu_hubspot_stages"
+              name="Etapas de los pipelines"
+              parent="menu_hubspot_root"
+              action="hubspot_deal_stage_action"
+              sequence="20"/>
+
+    <menuitem id="menu_hubspot_locations"
+              name="Localizaciones de facturación"
+              parent="menu_hubspot_root"
+              action="hubspot_location_mapping_action"
+              sequence="30"/>
+
+</odoo>

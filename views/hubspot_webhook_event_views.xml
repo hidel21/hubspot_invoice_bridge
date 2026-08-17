@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="hubspot_webhook_event_view_list" model="ir.ui.view">
+        <field name="name">hubspot.webhook.event.list</field>
+        <field name="model">hubspot.webhook.event</field>
+        <field name="arch" type="xml">
+            <list string="Eventos de HubSpot"
+                  decoration-danger="state == 'error'"
+                  decoration-muted="state == 'skipped'"
+                  decoration-success="state == 'done'">
+                <field name="occurred_at"/>
+                <field name="object_id"/>
+                <field name="property_name" optional="hide"/>
+                <field name="property_value"/>
+                <field name="partner_id" optional="show"/>
+                <field name="move_id" optional="show"/>
+                <field name="attempts" optional="hide"/>
+                <field name="error_message" optional="hide"/>
+                <field name="state" widget="badge"
+                       decoration-danger="state == 'error'"
+                       decoration-success="state == 'done'"
+                       decoration-info="state == 'pending'"/>
+                <button name="action_process" type="object" string="Procesar"
+                        icon="fa-play" invisible="state in ('done', 'skipped')"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="hubspot_webhook_event_view_form" model="ir.ui.view">
+        <field name="name">hubspot.webhook.event.form</field>
+        <field name="model">hubspot.webhook.event</field>
+        <field name="arch" type="xml">
+            <form string="Evento de HubSpot">
+                <header>
+                    <button name="action_process" type="object" string="Procesar ahora"
+                            class="btn-primary" invisible="state == 'done'"/>
+                    <button name="action_reset_to_pending" type="object"
+                            string="Reintentar" invisible="state != 'error'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="pending,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="object_id" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Evento">
+                            <field name="hubspot_event_id"/>
+                            <field name="subscription_type"/>
+                            <field name="property_name"/>
+                            <field name="property_value"/>
+                            <field name="occurred_at"/>
+                            <field name="portal_id"/>
+                        </group>
+                        <group string="Resultado">
+                            <field name="partner_id"/>
+                            <field name="move_id"/>
+                            <field name="attempts"/>
+                            <field name="processed_at"/>
+                        </group>
+                    </group>
+                    <group string="Detalle" invisible="not error_message">
+                        <field name="error_message" nolabel="1" readonly="1"/>
+                    </group>
+                    <notebook>
+                        <page string="Payload recibido">
+                            <field name="payload" widget="ace" options="{'mode': 'json'}"
+                                   readonly="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="hubspot_webhook_event_view_search" model="ir.ui.view">
+        <field name="name">hubspot.webhook.event.search</field>
+        <field name="model">hubspot.webhook.event</field>
+        <field name="arch" type="xml">
+            <search string="Eventos de HubSpot">
+                <field name="object_id"/>
+                <field name="hubspot_event_id"/>
+                <field name="partner_id"/>
+                <field name="move_id"/>
+                <filter name="filter_pending" string="Pendientes"
+                        domain="[('state', '=', 'pending')]"/>
+                <filter name="filter_error" string="Con error"
+                        domain="[('state', '=', 'error')]"/>
+                <filter name="filter_done" string="Procesados"
+                        domain="[('state', '=', 'done')]"/>
+                <separator/>
+                <filter name="filter_needs_attention" string="Requieren atención"
+                        domain="[('state', '=', 'error'), ('attempts', '&gt;=', 5)]"/>
+                <group expand="0" string="Agrupar por">
+                    <filter name="group_state" string="Estado"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_partner" string="Cliente"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_date" string="Fecha"
+                            context="{'group_by': 'occurred_at:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="hubspot_webhook_event_action" model="ir.actions.act_window">
+        <field name="name">Eventos de HubSpot</field>
+        <field name="res_model">hubspot.webhook.event</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_filter_error': 1, 'search_default_filter_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Todavía no ha llegado ningún evento</p>
+            <p>Aquí aparecerán los cambios de etapa que HubSpot envíe al webhook.
+               Cada evento que corresponda a una etapa ganada genera una factura
+               en borrador.</p>
+        </field>
+    </record>
+
+</odoo>

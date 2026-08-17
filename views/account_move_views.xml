@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="account_move_view_form_hubspot" model="ir.ui.view">
+        <field name="name">account.move.form.hubspot</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='invoice_origin']" position="after">
+                <field name="hubspot_deal_id" readonly="1"
+                       invisible="not hubspot_deal_id"/>
+                <field name="hubspot_portal_id" invisible="1"/>
+                <field name="hubspot_deal_url" widget="url" readonly="1"
+                       string="Ver en HubSpot"
+                       invisible="not hubspot_deal_url"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="account_move_view_search_hubspot" model="ir.ui.view">
+        <field name="name">account.move.search.hubspot</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_account_invoice_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="hubspot_deal_id" string="Negocio de HubSpot"/>
+            </xpath>
+            <xpath expr="//filter[@name='draft']" position="after">
+                <separator/>
+                <filter name="filter_from_hubspot" string="Originadas en HubSpot"
+                        domain="[('hubspot_deal_id', '!=', False)]"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

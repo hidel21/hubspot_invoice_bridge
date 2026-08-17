@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="res_config_settings_view_form_hubspot" model="ir.ui.view">
+        <field name="name">res.config.settings.form.hubspot</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@id='invoicing_settings']" position="after">
+                <block title="Integración con HubSpot" name="hubspot_bridge"
+                       groups="hubspot_invoice_bridge.group_hubspot_manager">
+
+                    <setting string="Credenciales de la private app"
+                             help="Se toman de la private app de HubSpot. El client secret es la clave con la que se firman los webhooks.">
+                        <div class="content-group mt16">
+                            <div class="row">
+                                <label for="hubspot_access_token" class="col-lg-4 o_light_label"/>
+                                <field name="hubspot_access_token" password="True"/>
+                            </div>
+                            <div class="row">
+                                <label for="hubspot_client_secret" class="col-lg-4 o_light_label"/>
+                                <field name="hubspot_client_secret" password="True"/>
+                            </div>
+                        </div>
+                    </setting>
+
+                    <setting string="Endpoint del webhook"
+                             help="URL pública que debe registrarse como Target URL en HubSpot. Debe ser HTTPS y accesible desde internet.">
+                        <div class="content-group mt16">
+                            <div class="row">
+                                <label for="hubspot_webhook_base_url" class="col-lg-4 o_light_label"/>
+                                <field name="hubspot_webhook_base_url"
+                                       placeholder="https://erp.midominio.com"/>
+                            </div>
+                            <div class="row">
+                                <label for="hubspot_webhook_url_preview" class="col-lg-4 o_light_label"/>
+                                <field name="hubspot_webhook_url_preview" readonly="1"/>
+                            </div>
+                        </div>
+                    </setting>
+
+                    <setting string="Validar la firma de los webhooks"
+                             help="Comprueba la cabecera X-HubSpot-Signature-v3. Desactívelo solo en desarrollo: sin validación, cualquiera que conozca la URL puede provocar facturas.">
+                        <field name="hubspot_verify_signature"/>
+                    </setting>
+
+                    <setting string="Propiedades de HubSpot"
+                             help="Nombres internos de las propiedades que lee la integración.">
+                        <div class="content-group mt16">
+                            <div class="row">
+                                <label for="hubspot_location_property" class="col-lg-5 o_light_label"/>
+                                <field name="hubspot_location_property" placeholder="pipeline"/>
+                            </div>
+                            <div class="row">
+                                <label for="hubspot_vat_property" class="col-lg-5 o_light_label"/>
+                                <field name="hubspot_vat_property" placeholder="nit"/>
+                            </div>
+                            <div class="row">
+                                <label for="hubspot_billing_email_property" class="col-lg-5 o_light_label"/>
+                                <field name="hubspot_billing_email_property"
+                                       placeholder="correo_de_facturacion"/>
+                            </div>
+                            <div class="row">
+                                <label for="hubspot_writeback_property" class="col-lg-5 o_light_label"/>
+                                <field name="hubspot_writeback_property"
+                                       placeholder="(vacío = no escribir en HubSpot)"/>
+                            </div>
+                        </div>
+                    </setting>
+
+                    <setting string="Comportamiento"
+                             help="Opciones de interpretación de los datos recibidos.">
+                        <div class="content-group mt16">
+                            <div class="row">
+                                <field name="hubspot_discount_is_percentage"/>
+                                <label for="hubspot_discount_is_percentage" class="o_light_label"/>
+                            </div>
+                            <div class="row">
+                                <field name="hubspot_sync_contacts"/>
+                                <label for="hubspot_sync_contacts" class="o_light_label"/>
+                            </div>
+                            <div class="row mt8">
+                                <label for="hubspot_responsible_user_id" class="col-lg-5 o_light_label"/>
+                                <field name="hubspot_responsible_user_id"/>
+                            </div>
+                        </div>
+                    </setting>
+
+                    <setting string="Etapas y localizaciones"
+                             help="Sincronice los pipelines de HubSpot y defina con qué compañía y diario se factura cada uno.">
+                        <div class="mt8">
+                            <button name="action_hubspot_sync_stages" type="object"
+                                    string="Sincronizar etapas desde HubSpot"
+                                    class="btn-link" icon="fa-refresh"/>
+                        </div>
+                        <div>
+                            <button name="%(hubspot_deal_stage_action)d" type="action"
+                                    string="Etapas" class="btn-link" icon="fa-arrow-right"/>
+                        </div>
+                        <div>
+                            <button name="%(hubspot_location_mapping_action)d" type="action"
+                                    string="Localizaciones de facturación"
+                                    class="btn-link" icon="fa-arrow-right"/>
+                        </div>
+                    </setting>
+
+                </block>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

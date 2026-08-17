@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Editores
+.idea/
+.vscode/
+*.swp
+*~
+
+# Sistema
+.DS_Store

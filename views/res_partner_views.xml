@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="res_partner_view_form_hubspot" model="ir.ui.view">
+        <field name="name">res.partner.form.hubspot</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='sales_purchases']//group[@name='misc']"
+                   position="inside">
+                <field name="hubspot_company_id" groups="account.group_account_invoice"/>
+                <field name="hubspot_contact_id" groups="account.group_account_invoice"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="res_partner_view_search_hubspot" model="ir.ui.view">
+        <field name="name">res.partner.search.hubspot</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="hubspot_company_id" string="ID de HubSpot"
+                       filter_domain="['|', ('hubspot_company_id', '=', self), ('hubspot_contact_id', '=', self)]"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

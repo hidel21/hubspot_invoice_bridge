@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="ir_cron_process_hubspot_events" model="ir.cron">
+        <field name="name">HubSpot: procesar eventos pendientes</field>
+        <field name="model_id" ref="model_hubspot_webhook_event"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_process_events()</field>
+        <field name="interval_number">2</field>
+        <field name="interval_type">minutes</field>
+        <field name="active" eval="True"/>
+    </record>
+
+    <record id="ir_cron_sync_hubspot_stages" model="ir.cron">
+        <field name="name">HubSpot: sincronizar etapas de los pipelines</field>
+        <field name="model_id" ref="model_hubspot_deal_stage"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_sync_stages()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <!-- Desactivado de inicio: requiere el access token configurado.
+             Actívelo tras rellenar las credenciales en Ajustes. -->
+        <field name="active" eval="False"/>
+    </record>
+
+</odoo>

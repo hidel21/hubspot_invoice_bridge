@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hubspot_webhook_event_manager,hubspot.webhook.event.manager,model_hubspot_webhook_event,group_hubspot_manager,1,1,1,1
+access_hubspot_webhook_event_user,hubspot.webhook.event.user,model_hubspot_webhook_event,account.group_account_invoice,1,0,0,0
+access_hubspot_deal_stage_manager,hubspot.deal.stage.manager,model_hubspot_deal_stage,group_hubspot_manager,1,1,1,1
+access_hubspot_deal_stage_user,hubspot.deal.stage.user,model_hubspot_deal_stage,account.group_account_invoice,1,0,0,0
+access_hubspot_location_mapping_manager,hubspot.location.mapping.manager,model_hubspot_location_mapping,group_hubspot_manager,1,1,1,1
+access_hubspot_location_mapping_user,hubspot.location.mapping.user,model_hubspot_location_mapping,account.group_account_invoice,1,0,0,0
