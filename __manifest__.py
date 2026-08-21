@@ -1,8 +1,8 @@
 {
-    'name': 'HubSpot → Odoo Invoice Bridge',
-    'version': '18.0.1.0.0',
-    'summary': 'Genera facturas de cliente en borrador desde negocios ganados en HubSpot',
-    'description': """
+    "name": "HubSpot → Odoo Invoice Bridge",
+    "version": "18.0.1.0.0",
+    "summary": "Genera facturas de cliente en borrador desde negocios ganados en HubSpot",
+    "description": """
 Integración HubSpot → Odoo
 ==========================
 
@@ -26,25 +26,25 @@ Características
 * Mapeo de localización: una propiedad del negocio en HubSpot determina la
   compañía, el diario y la posición fiscal con los que se factura.
 """,
-    'author': 'Intelli-Next',
-    'website': 'https://intelli-next.com',
-    'category': 'Accounting/Accounting',
-    'license': 'LGPL-3',
-    'depends': ['account'],
-    'data': [
-        'security/hubspot_security.xml',
-        'security/ir.model.access.csv',
-        'data/ir_cron.xml',
-        'views/hubspot_webhook_event_views.xml',
-        'views/hubspot_deal_stage_views.xml',
-        'views/hubspot_location_mapping_views.xml',
-        'views/account_move_views.xml',
-        'views/res_partner_views.xml',
-        'views/product_views.xml',
-        'views/res_config_settings_views.xml',
-        'views/hubspot_menus.xml',
+    "author": "Intelli-Next",
+    "website": "https://intelli-next.com",
+    "category": "Accounting/Accounting",
+    "license": "LGPL-3",
+    "depends": ["account"],
+    "data": [
+        "security/hubspot_security.xml",
+        "security/ir.model.access.csv",
+        "data/ir_cron.xml",
+        "views/hubspot_webhook_event_views.xml",
+        "views/hubspot_deal_stage_views.xml",
+        "views/hubspot_location_mapping_views.xml",
+        "views/account_move_views.xml",
+        "views/res_partner_views.xml",
+        "views/product_views.xml",
+        "views/res_config_settings_views.xml",
+        "views/hubspot_menus.xml",
     ],
-    'installable': True,
-    'application': True,
-    'auto_install': False,
+    "installable": True,
+    "application": True,
+    "auto_install": False,
 }

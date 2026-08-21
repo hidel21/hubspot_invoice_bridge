@@ -27,8 +27,13 @@ class HubspotWebhookController(http.Controller):
     """
 
     @http.route(
-        '/hubspot/webhook/deal',
-        type='http', auth='public', methods=['POST'], csrf=False, save_session=False)
+        "/hubspot/webhook/deal",
+        type="http",
+        auth="public",
+        methods=["POST"],
+        csrf=False,
+        save_session=False,
+    )
     def hubspot_deal_webhook(self, **kwargs):
         raw_body = request.httprequest.get_data()
 
@@ -37,27 +42,29 @@ class HubspotWebhookController(http.Controller):
             _logger.warning("Webhook de HubSpot rechazado: %s", error)
             # 401 hace que HubSpot reintente; es lo correcto ante un desajuste
             # transitorio de configuración y es inocuo ante una petición falsa.
-            return self._respond({'status': 'unauthorized', 'detail': error}, 401)
+            return self._respond({"status": "unauthorized", "detail": error}, 401)
 
         try:
-            payload = json.loads(raw_body.decode('utf-8') or '[]')
+            payload = json.loads(raw_body.decode("utf-8") or "[]")
         except (ValueError, UnicodeDecodeError) as err:
             _logger.warning("Webhook de HubSpot con cuerpo ilegible: %s", err)
             # 400: el cuerpo no va a mejorar con un reintento.
-            return self._respond({'status': 'bad_request'}, 400)
+            return self._respond({"status": "bad_request"}, 400)
 
         # HubSpot siempre agrupa los eventos en un array.
         if isinstance(payload, dict):
             payload = [payload]
         if not isinstance(payload, list):
-            return self._respond({'status': 'bad_request'}, 400)
+            return self._respond({"status": "bad_request"}, 400)
 
-        events = request.env['hubspot.webhook.event'].sudo().ingest_batch(payload)
+        events = request.env["hubspot.webhook.event"].sudo().ingest_batch(payload)
         _logger.info(
             "Webhook de HubSpot: %s eventos recibidos, %s nuevos encolados.",
-            len(payload), len(events))
+            len(payload),
+            len(events),
+        )
 
-        return self._respond({'status': 'ok', 'queued': len(events)}, 200)
+        return self._respond({"status": "ok", "queued": len(events)}, 200)
 
     # ------------------------------------------------------------------
 
@@ -74,22 +81,26 @@ class HubspotWebhookController(http.Controller):
 
         Devuelve ``None`` si la petición es válida, o el motivo del rechazo.
         """
-        params = request.env['ir.config_parameter'].sudo()
-        if params.get_param('hubspot_invoice_bridge.verify_signature', 'True') == 'False':
+        params = request.env["ir.config_parameter"].sudo()
+        if (
+            params.get_param("hubspot_invoice_bridge.verify_signature", "True")
+            == "False"
+        ):
             _logger.warning(
                 "La validación de firma de HubSpot está DESACTIVADA. "
-                "No debe usarse así en producción.")
+                "No debe usarse así en producción."
+            )
             return None
 
-        secret = params.get_param('hubspot_invoice_bridge.client_secret', '')
+        secret = params.get_param("hubspot_invoice_bridge.client_secret", "")
         if not secret:
             return "no hay client secret configurado"
 
-        signature = request.httprequest.headers.get('X-HubSpot-Signature-v3')
+        signature = request.httprequest.headers.get("X-HubSpot-Signature-v3")
         if not signature:
             return "falta la cabecera X-HubSpot-Signature-v3"
 
-        timestamp = request.httprequest.headers.get('X-HubSpot-Request-Timestamp')
+        timestamp = request.httprequest.headers.get("X-HubSpot-Request-Timestamp")
         if not timestamp:
             return "falta la cabecera X-HubSpot-Request-Timestamp"
 
@@ -112,8 +123,7 @@ class HubspotWebhookController(http.Controller):
         ).decode()
 
         if not hmac.compare_digest(expected, signature):
-            _logger.debug(
-                "Firma no coincidente. URI usada para el cálculo: %s", uri)
+            _logger.debug("Firma no coincidente. URI usada para el cálculo: %s", uri)
             return "firma no válida (revise el client secret y la URL pública)"
 
         return None
@@ -127,13 +137,15 @@ class HubspotWebhookController(http.Controller):
         configurada.
         """
         httprequest = request.httprequest
-        params = request.env['ir.config_parameter'].sudo()
-        base = (params.get_param('hubspot_invoice_bridge.webhook_base_url', '')
-                or params.get_param('web.base.url', '')).rstrip('/')
+        params = request.env["ir.config_parameter"].sudo()
+        base = (
+            params.get_param("hubspot_invoice_bridge.webhook_base_url", "")
+            or params.get_param("web.base.url", "")
+        ).rstrip("/")
         if not base:
             return httprequest.url
 
         uri = base + httprequest.path
         if httprequest.query_string:
-            uri += '?' + httprequest.query_string.decode()
+            uri += "?" + httprequest.query_string.decode()
         return uri

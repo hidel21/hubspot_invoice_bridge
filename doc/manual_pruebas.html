@@ -1,0 +1,1081 @@
+<title>Puesta en marcha del puente HubSpot</title>
+<style>
+  :root {
+    --paper:      #F2F4F4;
+    --surface:    #FFFFFF;
+    --surface-2:  #E7ECEC;
+    --ink:        #131A1B;
+    --ink-muted:  #5C6A6C;
+    --ink-faint:  #849496;
+    --accent:     #1F5F6B;
+    --accent-bg:  #E2EFF1;
+    --rule:       #D2DBDC;
+    --ok:         #1B6B4C;
+    --ok-bg:      #E1F0E9;
+    --warn:       #8A5A0F;
+    --warn-bg:    #F7EEDD;
+    --risk:       #9B2C2C;
+    --risk-bg:    #F8E7E5;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #101617;
+      --surface:   #151D1E;
+      --surface-2: #1D2728;
+      --ink:       #E4EBEB;
+      --ink-muted: #9FB0B1;
+      --ink-faint: #7B8C8D;
+      --accent:    #79C3CD;
+      --accent-bg: #143033;
+      --rule:      #2A3637;
+      --ok:        #62C79C;
+      --ok-bg:     #14291F;
+      --warn:      #D9A34A;
+      --warn-bg:   #2C2416;
+      --risk:      #E38B8B;
+      --risk-bg:   #31201F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:     #101617;
+    --surface:   #151D1E;
+    --surface-2: #1D2728;
+    --ink:       #E4EBEB;
+    --ink-muted: #9FB0B1;
+    --ink-faint: #7B8C8D;
+    --accent:    #79C3CD;
+    --accent-bg: #143033;
+    --rule:      #2A3637;
+    --ok:        #62C79C;
+    --ok-bg:     #14291F;
+    --warn:      #D9A34A;
+    --warn-bg:   #2C2416;
+    --risk:      #E38B8B;
+    --risk-bg:   #31201F;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink); font-family: var(--sans);
+    font-size: 16px; line-height: 1.6; margin: 0; padding: 0 1.25rem 5rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 54rem; margin: 0 auto; }
+  .prose { max-width: 40rem; }
+
+  header.masthead {
+    padding: 3.5rem 0 1.75rem; border-bottom: 2px solid var(--ink);
+    display: flex; flex-direction: column; gap: .75rem;
+  }
+  .eyebrow {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent); margin: 0;
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 400; font-size: clamp(2rem, 5vw, 2.9rem);
+    line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -.01em;
+  }
+  .standfirst { margin: 0; color: var(--ink-muted); font-size: 1.05rem; max-width: 38rem; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: .4rem 1.5rem; margin-top: .5rem;
+    font-family: var(--mono); font-size: .76rem; color: var(--ink-faint);
+  }
+  .meta b { color: var(--ink-muted); font-weight: 500; }
+
+  section { margin-top: 3.25rem; }
+  h2 {
+    font-family: var(--serif); font-weight: 400; font-size: 1.6rem; line-height: 1.2;
+    margin: 0 0 .35rem; text-wrap: balance;
+  }
+  h2 .num {
+    font-family: var(--mono); font-size: .78rem; color: var(--accent);
+    letter-spacing: .1em; text-transform: uppercase; display: block; margin-bottom: .3rem;
+  }
+  h3 { font-family: var(--sans); font-size: .95rem; font-weight: 650; margin: 1.5rem 0 .5rem; }
+  p { margin: 0 0 .85rem; }
+  a { color: var(--accent); }
+  a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code {
+    font-family: var(--mono); font-size: .875em; background: var(--surface-2);
+    padding: .1em .35em; border-radius: 2px; word-break: break-word;
+  }
+  strong { font-weight: 650; }
+
+  .figures {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin-top: 1.25rem;
+  }
+  .fig { background: var(--surface); padding: .9rem 1rem; }
+  .fig .n {
+    font-family: var(--serif); font-size: 1.75rem; line-height: 1.1;
+    font-variant-numeric: tabular-nums; display: block;
+  }
+  .fig .l { font-size: .78rem; color: var(--ink-muted); display: block; margin-top: .15rem; }
+
+  .warnings { display: flex; flex-direction: column; gap: .75rem; margin-top: 1.25rem; }
+  .warning {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-top: 3px solid var(--risk); padding: 1rem 1.15rem;
+  }
+  .warning.amber { border-top-color: var(--warn); }
+  .warning.calm { border-top-color: var(--accent); }
+  .warning h3 { margin: 0 0 .35rem; font-size: .95rem; }
+  .warning p { margin: 0; font-size: .93rem; color: var(--ink-muted); }
+  .warning p + p { margin-top: .5rem; }
+
+  /* fase */
+  .phase {
+    display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap;
+    padding: .75rem 0 .25rem; border-top: 1px solid var(--rule); margin-top: 2.5rem;
+  }
+  .phase .tag {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--accent);
+    background: var(--accent-bg); padding: .25rem .6rem;
+  }
+  .phase .need { font-size: .85rem; color: var(--ink-muted); }
+
+  .test { background: var(--surface); border: 1px solid var(--rule); margin-top: 1.25rem; }
+  .test > .head {
+    display: flex; align-items: flex-start; gap: .85rem;
+    padding: .95rem 1.15rem; border-bottom: 1px solid var(--rule); background: var(--surface-2);
+  }
+  .test .idx {
+    font-family: var(--mono); font-size: .95rem; color: var(--accent);
+    font-variant-numeric: tabular-nums; padding-top: .12rem; min-width: 1.6rem;
+  }
+  .test .title { flex: 1; min-width: 0; }
+  .test .title h3 { margin: 0; font-size: 1.02rem; font-weight: 650; }
+  .test .title .sub { font-size: .85rem; color: var(--ink-muted); margin-top: .15rem; }
+  .chips { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+  .chip {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .06em;
+    text-transform: uppercase; padding: .2rem .5rem; border-radius: 2px; white-space: nowrap;
+  }
+  .chip.time { background: var(--surface); color: var(--ink-muted); border: 1px solid var(--rule); }
+  .chip.safe { background: var(--ok-bg); color: var(--ok); }
+  .chip.care { background: var(--warn-bg); color: var(--warn); }
+  .chip.danger { background: var(--risk-bg); color: var(--risk); }
+  .test > .body { padding: 1.15rem; }
+  .test .label {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-faint); margin: 0 0 .45rem;
+  }
+  .test ol, .test ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+  .test li { margin-bottom: .4rem; }
+  .test li:last-child { margin-bottom: 0; }
+  .expect { background: var(--accent-bg); padding: .9rem 1.1rem; margin-top: .25rem; }
+  .expect .label { color: var(--accent); }
+  .expect ul { margin: 0; padding-left: 1.2rem; }
+  .expect > p:last-child { margin-bottom: 0; }
+  .note {
+    font-size: .9rem; color: var(--ink-muted); border-left: 2px solid var(--rule);
+    padding-left: .9rem; margin-top: 1rem;
+  }
+  .test .foot {
+    display: flex; align-items: center; gap: .6rem; padding: .7rem 1.15rem;
+    border-top: 1px dashed var(--rule); font-size: .88rem; color: var(--ink-muted);
+  }
+  .test .foot input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); cursor: pointer; }
+  .test .foot label { cursor: pointer; user-select: none; }
+
+  .scroll { overflow-x: auto; margin: 0 0 1rem; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .89rem; }
+  th, td { padding: .5rem .75rem; text-align: left; border-bottom: 1px solid var(--rule); }
+  th {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-muted); font-weight: 500; background: var(--surface-2); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono { font-family: var(--mono); font-size: .84rem; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--mono); }
+
+  .state {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .05em; text-transform: uppercase;
+    padding: .15rem .45rem; border-radius: 2px; white-space: nowrap;
+  }
+  .state.pending { background: var(--surface-2); color: var(--ink-muted); }
+  .state.skipped { background: var(--warn-bg); color: var(--warn); }
+  .state.done { background: var(--ok-bg); color: var(--ok); }
+  .state.error { background: var(--risk-bg); color: var(--risk); }
+
+  pre {
+    background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+    padding: .85rem 1rem; overflow-x: auto; font-family: var(--mono);
+    font-size: .82rem; line-height: 1.55; margin: 0 0 1rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  .progress {
+    position: sticky; top: 0; z-index: 5; background: var(--paper);
+    padding: .6rem 0; border-bottom: 1px solid var(--rule);
+    display: flex; align-items: center; gap: .8rem;
+    font-family: var(--mono); font-size: .78rem; color: var(--ink-muted);
+  }
+  .progress .bar { flex: 1; height: 4px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+  .progress .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
+  .progress button {
+    font: inherit; color: var(--ink-muted); background: none; border: 1px solid var(--rule);
+    padding: .15rem .55rem; border-radius: 2px; cursor: pointer;
+  }
+  .progress button:hover { color: var(--accent); border-color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { .progress .bar i { transition: none; } }
+
+  footer {
+    margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--rule);
+    font-size: .84rem; color: var(--ink-faint);
+  }
+
+  @media print {
+    body { background: #fff; color: #000; padding: 0; font-size: 11pt; }
+    .progress, .test .foot input { display: none; }
+    .test, .warning, .scroll, pre { break-inside: avoid; border-color: #bbb; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">Intelli Next · hubspot_invoice_bridge</p>
+  <h1>Puesta en marcha del puente HubSpot</h1>
+  <p class="standfirst">Quince comprobaciones en cinco fases, ordenadas por lo que hace falta
+     tener. Las tres primeras fases no necesitan ninguna credencial de HubSpot.</p>
+  <div class="meta">
+    <span><b>Módulo</b> hubspot_invoice_bridge 18.0</span>
+    <span><b>Base de datos</b> OV18_INTELLIDM</span>
+    <span><b>Endpoint</b> /hubspot/webhook/deal</span>
+    <span><b>Estado verificado</b> 18-08-2026</span>
+  </div>
+</header>
+
+<div class="progress">
+  <span id="count">0 / 15</span>
+  <span class="bar"><i id="bar"></i></span>
+  <button type="button" id="reset">Reiniciar</button>
+</div>
+
+<section>
+  <h2>De dónde partimos</h2>
+  <p class="prose">El módulo está instalado y no tiene absolutamente nada configurado. Esa es
+     buena noticia para probar: se puede recorrer el manual entero desde cero.</p>
+  <div class="figures">
+    <div class="fig"><span class="n">0</span><span class="l">credenciales<br>ni token ni client secret</span></div>
+    <div class="fig"><span class="n">0</span><span class="l">etapas sincronizadas<br>y 0 localizaciones</span></div>
+    <div class="fig"><span class="n">0</span><span class="l">eventos en cola</span></div>
+    <div class="fig"><span class="n">2 min</span><span class="l">cron de proceso<br><b>activo</b></span></div>
+  </div>
+  <p class="note">El cron <b>HubSpot: procesar eventos pendientes</b> ya está activo y se ejecuta
+     cada 2 minutos. El de sincronizar etapas está desactivado a propósito, porque necesita el
+     token. Ten presente el primero: en cuanto haya eventos en cola, se procesarán solos.</p>
+</section>
+
+<section>
+  <h2><span class="num">Fase 0</span>Tres cosas bloquean la producción</h2>
+  <p class="prose">Ninguna impide probar en local, pero las tres hay que resolverlas antes de
+     conectar el portal real.</p>
+  <div class="warnings">
+
+    <div class="warning">
+      <h3>Hay un access token en claro dentro de un fichero del disco</h3>
+      <p>Está en <code>/opt/18.0e/guia-hubspot-webhooks-api.md</code>, empieza por
+         <code>pat-na1-…</code>. Los tokens de private app de HubSpot <b>no caducan</b>: mientras
+         exista, quien lea ese fichero tiene acceso al CRM.</p>
+      <p>Revócalo en HubSpot, genera uno nuevo, guárdalo únicamente en Ajustes de Odoo —donde va a
+         <code>ir.config_parameter</code>, no al repositorio— y quita el valor del fichero.
+         <b>Hazlo antes de la fase 4</b>, para no volver a pegar el token viejo.</p>
+    </div>
+
+    <div class="warning">
+      <h3>No hay URL pública, así que HubSpot todavía no puede entregar nada</h3>
+      <p>HubSpot exige una Target URL HTTPS accesible desde internet, y aquí Odoo escucha solo en
+         <code>127.0.0.1:8069</code>. Hace falta un proxy inverso con certificado.</p>
+      <p>Mientras tanto, las fases 1 a 4 se prueban simulando las peticiones en local, con la
+         misma firma que usa HubSpot. Solo la fase 5 queda bloqueada.</p>
+    </div>
+
+    <div class="warning amber">
+      <h3>Sigue sin resolverse si <code>discount</code> es importe o porcentaje</h3>
+      <p>En la semántica estándar de HubSpot es un importe; el inventario de propiedades del
+         portal lo documenta como porcentaje. Interpretarlo mal altera el importe facturado. La
+         prueba 13 lo resuelve de forma definitiva con una sola llamada a la API.</p>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <h2>Antes de empezar</h2>
+  <div class="warnings">
+    <div class="warning calm">
+      <h3>Deja vacía la propiedad de escritura de vuelta</h3>
+      <p>Si rellenas <b>Propiedad para devolver la factura</b> en Ajustes, el módulo hace un PATCH
+         sobre el negocio en HubSpot cada vez que crea una factura. Durante las pruebas déjala en
+         blanco: así nada de lo que hagas modifica el CRM.</p>
+    </div>
+    <div class="warning calm">
+      <h3>Las facturas se quedan en borrador</h3>
+      <p>El módulo nunca valida ni contabiliza. Mantenlo así durante las pruebas: esta base
+         conserva las credenciales de producción de la DIAN, y validar una factura de prueba
+         podría disparar facturación electrónica real.</p>
+    </div>
+  </div>
+  <h3>Arrancar y mirar el log</h3>
+  <pre><code>~/odoo18/start.sh
+tail -f ~/odoo18/logs/odoo.log</code></pre>
+  <p class="prose">Casi todo lo que hace este módulo deja rastro en el log. Ténlo abierto en una
+     segunda terminal durante todo el manual.</p>
+</section>
+
+<!-- ════════════════ FASE 1 ════════════════ -->
+
+<div class="phase">
+  <span class="tag">Fase 1</span>
+  <span class="need">No requiere nada. Comprobar que lo instalado responde.</span>
+</div>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">01</span>
+    <div class="title">
+      <h3>Los menús, el grupo y los crones existen</h3>
+      <div class="sub">Contabilidad → Configuración → HubSpot</div>
+    </div>
+    <div class="chips"><span class="chip time">10 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Entra como administrador y abre <b>Contabilidad → Configuración</b>. Debe haber un menú
+          <b>HubSpot</b> con tres entradas: Eventos recibidos, Etapas de los pipelines y
+          Localizaciones de facturación.</li>
+      <li>Abre <b>Ajustes → Contabilidad</b> y busca el bloque <b>Integración con HubSpot</b>.</li>
+      <li>En <b>Ajustes → Técnico → Automatización → Acciones planificadas</b>, filtra por
+          «HubSpot».</li>
+      <li>Comprueba en <b>Ajustes → Usuarios y compañías → Grupos</b> que existe
+          <b>HubSpot: administrador de la integración</b>.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <ul>
+        <li>Los tres menús aparecen y abren listas vacías.</li>
+        <li>El bloque de ajustes muestra los campos de credenciales, el endpoint y las propiedades.
+            El campo <b>Target URL a registrar en HubSpot</b> ya viene calculado:
+            <code>http://localhost:8069/hubspot/webhook/deal</code>.</li>
+        <li>Hay dos acciones planificadas: <b>procesar eventos pendientes</b> cada 2 minutos y
+            activa, y <b>sincronizar etapas</b> diaria y <b>desactivada</b>.</li>
+        <li>El grupo existe e implica «Facturación» de contabilidad.</li>
+      </ul>
+    </div>
+    <p class="note">El bloque de ajustes solo lo ven los miembros del grupo de HubSpot. Si no
+      aparece, es que el usuario no está en él, no que falte el módulo.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t1"><label for="t1">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">02</span>
+    <div class="title">
+      <h3>El endpoint existe y rechaza lo que no viene firmado</h3>
+      <div class="sub">POST /hubspot/webhook/deal</div>
+    </div>
+    <div class="chips"><span class="chip time">5 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <pre><code>curl -i -X POST http://localhost:8069/hubspot/webhook/deal \
+     -H 'Content-Type: application/json' --data '[]'</code></pre>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <p><b>HTTP 401</b> con el cuerpo
+         <code>{"status": "unauthorized", "detail": "no hay client secret configurado"}</code>,
+         y una línea de aviso en el log.</p>
+      <p>Que devuelva 401 y no 404 confirma que la ruta está registrada. Que el motivo sea la
+         falta de client secret confirma que la validación de firma está activa: es lo correcto
+         mientras no haya credenciales.</p>
+    </div>
+    <p class="note">El endpoint responde 401 —y no 403— a propósito: ante un 401 HubSpot
+      reintenta, que es lo que interesa si el rechazo se debe a un desajuste temporal de
+      configuración.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t2"><label for="t2">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">03</span>
+    <div class="title">
+      <h3>El cron corre en vacío sin quejarse</h3>
+      <div class="sub">Cola vacía</div>
+    </div>
+    <div class="chips"><span class="chip time">5 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Deja pasar un par de ciclos del cron, o ejecútalo a mano desde <b>Acciones
+          planificadas → Ejecutar manualmente</b>.</li>
+      <li>Revisa el log.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <p>Nada. Sin eventos en cola no hay trabajo, no hay llamadas a la API y no aparece ningún
+         error. Si vieras trazas de HubSpot aquí, algo estaría mal.</p>
+    </div>
+  </div>
+  <div class="foot"><input type="checkbox" id="t3"><label for="t3">Prueba superada</label></div>
+</article>
+
+<!-- ════════════════ FASE 2 ════════════════ -->
+
+<div class="phase">
+  <span class="tag">Fase 2</span>
+  <span class="need">Tampoco requiere HubSpot. Configurar el destino contable.</span>
+</div>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">04</span>
+    <div class="title">
+      <h3>Localizaciones de facturación, con una predeterminada</h3>
+      <div class="sub">Contabilidad → Configuración → HubSpot → Localizaciones de facturación</div>
+    </div>
+    <div class="chips"><span class="chip time">20 min</span><span class="chip care">Decisión de negocio</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <p>Aquí se decide con qué compañía, diario y posición fiscal se factura cada negocio. Por
+       defecto el módulo enruta por la propiedad <code>pipeline</code>, y el portal tiene tres:</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Pipeline en HubSpot</th><th>Valor interno</th><th>Compañía en Odoo</th><th>Diario</th></tr></thead>
+        <tbody>
+          <tr><td>Pipeline de ventas</td><td class="mono">default</td><td>por decidir</td><td>por decidir</td></tr>
+          <tr><td>Pipeline de ventas · JoobPay</td><td class="mono">793842865</td><td>por decidir</td><td>por decidir</td></tr>
+          <tr><td>Clientes No Gestionados</td><td class="mono">666208615</td><td>por decidir</td><td>por decidir</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ol>
+      <li>Crea una línea por cada valor que quieras enrutar, eligiendo compañía y diario de venta.</li>
+      <li>Marca <b>una sola</b> línea como <b>Predeterminada</b> y déjale el valor de HubSpot vacío.</li>
+      <li>Intenta marcar una segunda como predeterminada, para ver el aviso.</li>
+      <li>Intenta guardar una línea con un diario de otra compañía.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <ul>
+        <li>La segunda predeterminada se rechaza: «Sólo puede haber un mapeo de localización
+            predeterminado».</li>
+        <li>El diario de otra compañía se rechaza con el nombre del diario y de la compañía.</li>
+        <li>Dos líneas con el mismo valor de HubSpot también se rechazan.</li>
+      </ul>
+      <p>Sin línea predeterminada, cualquier negocio cuyo pipeline no esté mapeado deja el evento
+         en error. Es el fallo de configuración más probable.</p>
+    </div>
+    <p class="note">Hay 7 compañías con 14 diarios de venta entre todas. Elegir el par
+      compañía/diario de cada pipeline es una decisión de negocio: conviene confirmarla antes de
+      la fase 4, porque determina en qué libro acaba cada factura.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t4"><label for="t4">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">05</span>
+    <div class="title">
+      <h3>Cargar a mano las dos etapas ganadas conocidas</h3>
+      <div class="sub">Evita tener que llamar a la API para seguir probando</div>
+    </div>
+    <div class="chips"><span class="chip time">10 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <p>El módulo solo llama a la API cuando recibe una etapa que <em>no</em> conoce. Si las creas a
+       mano, toda la fase 3 funciona sin token. Las etapas ganadas del portal ya están
+       identificadas:</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>ID de etapa</th><th>Etiqueta</th><th>ID de pipeline</th><th>Genera factura</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">closedwon</td><td>Cerrado ganado</td><td class="mono">default</td><td>Sí</td></tr>
+          <tr><td class="mono">1163347550</td><td>Cerrado ganado · JoobPay</td><td class="mono">793842865</td><td>Sí</td></tr>
+          <tr><td class="mono">appointmentscheduled</td><td>Cita programada</td><td class="mono">default</td><td>No</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ol>
+      <li>En <b>Etapas de los pipelines</b>, crea las tres filas de arriba. La lista es editable
+          directamente.</li>
+      <li>La tercera es la de control: sirve para comprobar en la prueba 10 que una etapa que no
+          factura se descarta.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <p>Las tres se guardan. Si repites un ID de etapa, salta la restricción de unicidad.</p>
+      <p>Cuando en la fase 4 sincronices desde HubSpot, estas filas se actualizarán con los datos
+         reales y <b>no</b> se pisará la marca <b>Genera factura</b>: solo se propone en la
+         creación.</p>
+    </div>
+    <p class="note">Comparar contra la cadena <code>closedwon</code> habría ignorado en silencio
+      todos los negocios de JoobPay, cuya etapa ganada es <code>1163347550</code>. Por eso el
+      módulo mantiene este espejo local.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t5"><label for="t5">Prueba superada</label></div>
+</article>
+
+<!-- ════════════════ FASE 3 ════════════════ -->
+
+<div class="phase">
+  <span class="tag">Fase 3</span>
+  <span class="need">Requiere un client secret inventado. Sigue sin tocar HubSpot.</span>
+</div>
+
+<section>
+  <p class="prose">Esta es la fase larga y la que más cubre. La idea: pones un client secret
+     cualquiera en Ajustes y firmas tú las peticiones con el script
+     <code>doc/firmar_webhook.py</code>, que reproduce exactamente el mismo cálculo que valida el
+     controlador. Para Odoo son indistinguibles de las de HubSpot.</p>
+  <h3>Preparación</h3>
+  <ol class="prose">
+    <li>En <b>Ajustes → Contabilidad → Integración con HubSpot</b>, pon en <b>Client secret</b> un
+        valor cualquiera, por ejemplo <code>secreto-de-pruebas</code>.</li>
+    <li>Deja <b>URL pública del webhook</b> vacía: se usará <code>web.base.url</code>, que aquí ya
+        es <code>http://localhost:8069</code>.</li>
+    <li>Deja <b>Validar la firma</b> <b>activado</b>. Precisamente queremos probar la validación.</li>
+    <li>Deja el access token vacío. En esta fase no hace falta.</li>
+  </ol>
+  <pre><code>cd ~/odoo18/custom_addons/hubspot_invoice_bridge/doc
+python3 firmar_webhook.py --secret secreto-de-pruebas \
+        --body evento_ejemplo.json --enviar</code></pre>
+  <p class="prose">Sin <code>--enviar</code> imprime la orden <code>curl</code> equivalente, por si
+     prefieres lanzarla a mano o guardarla.</p>
+</section>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">06</span>
+    <div class="title">
+      <h3>Una petición bien firmada entra en la cola</h3>
+      <div class="sub">El camino feliz</div>
+    </div>
+    <div class="chips"><span class="chip time">10 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Lanza el script con <code>--enviar</code>.</li>
+      <li>Abre <b>Contabilidad → Configuración → HubSpot → Eventos recibidos</b>.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <ul>
+        <li>Respuesta <b>HTTP 200</b> con <code>{"status": "ok", "queued": 1}</code>, y en unas
+            decenas de milisegundos.</li>
+        <li>Un evento en la lista con estado <span class="state pending">Pendiente</span>, negocio
+            <code>987654321</code>, propiedad <code>dealstage</code> y valor
+            <code>closedwon</code>.</li>
+        <li>Al abrirlo, la pestaña <b>Payload recibido</b> muestra el JSON íntegro tal y como
+            llegó.</li>
+      </ul>
+    </div>
+    <p class="note">El webhook no crea la factura: solo encola y responde. Todo lo demás lo hace
+      el cron. Es lo que permite responder en milisegundos y no provocar los reintentos de
+      HubSpot, que espera respuesta en unos 5 segundos.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t6"><label for="t6">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">07</span>
+    <div class="title">
+      <h3>Las cuatro formas de rechazo</h3>
+      <div class="sub">Firma mal, firma ausente, petición caducada, cuerpo ilegible</div>
+    </div>
+    <div class="chips"><span class="chip time">15 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Caso</th><th>Cómo provocarlo</th><th>Respuesta</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Secreto equivocado</td>
+            <td class="mono">--secret otro-secreto</td>
+            <td class="mono">401 firma no válida</td>
+          </tr>
+          <tr>
+            <td>Sin cabeceras</td>
+            <td class="mono">curl a pelo, sin firmar</td>
+            <td class="mono">401 falta la cabecera</td>
+          </tr>
+          <tr>
+            <td>Petición caducada</td>
+            <td class="mono">--timestamp (ahora − 6 min)</td>
+            <td class="mono">401 petición caducada</td>
+          </tr>
+          <tr>
+            <td>Cuerpo manipulado</td>
+            <td>firma un fichero y envía otro</td>
+            <td class="mono">401 firma no válida</td>
+          </tr>
+          <tr>
+            <td>Cuerpo ilegible</td>
+            <td>firma y envía un fichero que no sea JSON</td>
+            <td class="mono">400 bad_request</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Para el caducado, calcula el timestamp de hace seis minutos:</p>
+    <pre><code>python3 firmar_webhook.py --secret secreto-de-pruebas \
+        --body evento_ejemplo.json --enviar \
+        --timestamp $(python3 -c 'import time; print(int(time.time()*1000) - 360000)')</code></pre>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <p>Los cuatro primeros dan <b>401</b> con el motivo concreto en el cuerpo y un
+         <code>WARNING</code> en el log. El quinto da <b>400</b>, porque un cuerpo ilegible no va a
+         mejorar reintentando.</p>
+      <p><b>Ninguno</b> de los cinco crea un evento en la cola. Compruébalo: la lista debe seguir
+         teniendo solo el evento de la prueba 06.</p>
+    </div>
+    <p class="note">La ventana anti-replay es de 5 minutos, la misma que usa HubSpot. Si esta
+      prueba falla por poco, revisa la hora del sistema.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t7"><label for="t7">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">08</span>
+    <div class="title">
+      <h3>El mismo evento dos veces se registra una sola vez</h3>
+      <div class="sub">Primera capa de idempotencia: el eventId</div>
+    </div>
+    <div class="chips"><span class="chip time">5 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Vuelve a enviar exactamente el mismo <code>evento_ejemplo.json</code>, con firma nueva
+          (el timestamp cambia, el <code>eventId</code> no).</li>
+      <li>Cuenta los eventos de la cola.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <p>Respuesta <b>200</b> con <code>"queued": 0</code> y <b>un solo</b> evento en la lista.
+         En el log, una línea informativa: «ya registrado, se ignora el duplicado».</p>
+      <p>Prueba también un lote mixto: copia el fichero, cambia el <code>eventId</code> a
+         <code>100000002</code> en una de las dos entradas y envía las dos juntas en el mismo
+         array. Debe responder <code>"queued": 1</code> y quedar dos eventos en total.</p>
+    </div>
+    <p class="note">Esto es lo que absorbe los reintentos de HubSpot, que reenvía durante 24 horas
+      si no recibe un 2xx.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t8"><label for="t8">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">09</span>
+    <div class="title">
+      <h3>Lo que no procede facturar se descarta, no falla</h3>
+      <div class="sub">Otra propiedad · etapa que no genera factura</div>
+    </div>
+    <div class="chips"><span class="chip time">10 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Copia el payload y cambia <code>"propertyName"</code> a <code>"amount"</code> y el
+          <code>eventId</code> a uno nuevo. Envíalo.</li>
+      <li>Copia otro con <code>propertyName</code> = <code>dealstage</code> pero
+          <code>propertyValue</code> = <code>appointmentscheduled</code>, la etapa de control que
+          creaste en la prueba 05. Envíalo.</li>
+      <li>Espera al cron, o ejecútalo a mano, o abre cada evento y pulsa <b>Procesar ahora</b>.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <p>Los dos quedan en <span class="state skipped">Descartado</span>, cada uno con su motivo
+         en el detalle:</p>
+      <ul>
+        <li>«La propiedad 'amount' no es 'dealstage'.»</li>
+        <li>«La etapa 'appointmentscheduled' no genera factura.»</li>
+      </ul>
+      <p>Ninguno llama a la API de HubSpot, cosa que se nota en que <b>no</b> fallan por falta de
+         token.</p>
+    </div>
+    <p class="note">Si en lugar de «Descartado» ves «Error» con un mensaje sobre el access token,
+      es que la etapa no estaba dada de alta: al no conocerla, el módulo intenta sincronizar
+      pipelines contra la API. Vuelve a la prueba 05.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t9"><label for="t9">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">10</span>
+    <div class="title">
+      <h3>Un negocio ya facturado no se factura dos veces</h3>
+      <div class="sub">Segunda capa de idempotencia: hubspot_deal_id en la factura</div>
+    </div>
+    <div class="chips"><span class="chip time">10 min</span><span class="chip care">Crea una factura de prueba</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Crea a mano una factura de cliente en borrador, con cualquier cliente y una línea
+          cualquiera. No la valides.</li>
+      <li>Márcala como procedente del negocio de prueba. El campo es de solo lectura en la
+          interfaz, así que se pone desde la consola:</li>
+    </ol>
+    <pre><code>cd ~/odoo18 &amp;&amp; ./venv/bin/python 18.0/odoo-bin shell \
+    -c odoo.conf -d OV18_INTELLIDM</code></pre>
+    <pre><code>f = env['account.move'].browse(&lt;id de la factura&gt;)
+f.hubspot_deal_id = '987654321'
+env.cr.commit()
+exit()</code></pre>
+    <ol start="3">
+      <li>Vuelve al evento de la prueba 06 (el de <code>closedwon</code>), pulsa <b>Reintentar</b>
+          y luego <b>Procesar ahora</b>.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <p>El evento queda en <span class="state done">Procesado</span>, enlazado a esa factura, con
+         el detalle «El negocio ya tenía la factura …; no se duplica». <b>No</b> se crea ninguna
+         factura nueva y <b>no</b> se llama a la API: la comprobación ocurre antes.</p>
+      <p>Comprueba además la restricción de base de datos: intenta poner el mismo
+         <code>hubspot_deal_id</code> en una segunda factura. Debe rechazarlo con «Ya existe una
+         factura generada para ese negocio de HubSpot».</p>
+    </div>
+    <p class="note">Al terminar, borra la factura de prueba. Está en borrador, así que se puede
+      eliminar sin dejar hueco en la numeración.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t10"><label for="t10">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">11</span>
+    <div class="title">
+      <h3>Un evento que falla avisa a alguien y deja de reintentar</h3>
+      <div class="sub">Reintentos y actividad al responsable</div>
+    </div>
+    <div class="chips"><span class="chip time">10 min</span><span class="chip safe">Sin riesgo</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>En Ajustes, rellena <b>Responsable de incidencias</b> con tu usuario.</li>
+      <li>Envía un evento con <code>dealstage</code> = <code>closedwon</code> y un
+          <code>objectId</code> nuevo que no esté facturado (por ejemplo <code>111222333</code>),
+          con <code>eventId</code> nuevo.</li>
+      <li>Procésalo. Fallará: no hay access token.</li>
+      <li>Pulsa <b>Procesar ahora</b> varias veces y observa el contador de intentos.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <ul>
+        <li>El evento queda en <span class="state error">Error</span> con el mensaje sobre el
+            access token, y el contador de <b>Intentos</b> sube.</li>
+        <li>Aparece una <b>actividad</b> asignada al responsable, titulada «Negocio 111222333 de
+            HubSpot sin facturar». En los reintentos se actualiza la nota, no se crea otra
+            actividad.</li>
+        <li>A partir de <b>5 intentos</b>, el cron deja de tomarlo. Solo vuelve a entrar en cola
+            con el botón <b>Reintentar</b>, que pone el contador a cero.</li>
+      </ul>
+    </div>
+    <p class="note">El filtro <b>Requieren atención</b> de la lista de eventos es el que conviene
+      dejar guardado: reúne lo que está pendiente de alguien.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t11"><label for="t11">Prueba superada</label></div>
+</article>
+
+<!-- ════════════════ FASE 4 ════════════════ -->
+
+<div class="phase">
+  <span class="tag">Fase 4</span>
+  <span class="need">Requiere el access token ya rotado. Lee y escribe contra el CRM real.</span>
+</div>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">12</span>
+    <div class="title">
+      <h3>Sincronizar las etapas desde HubSpot</h3>
+      <div class="sub">Primera llamada real a la API</div>
+    </div>
+    <div class="chips"><span class="chip time">10 min</span><span class="chip care">Solo lectura</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Pega el token nuevo en <b>Access token</b> y el client secret <b>real</b> del portal,
+          sustituyendo el inventado de la fase 3.</li>
+      <li>Pulsa <b>Sincronizar etapas desde HubSpot</b>.</li>
+      <li>Revisa la lista de etapas.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <ul>
+        <li>Una notificación con el recuento de creadas, actualizadas y archivadas.</li>
+        <li>Aparecen todas las etapas de los tres pipelines, con su etiqueta, orden y probabilidad.</li>
+        <li>Las que creaste a mano en la prueba 05 aparecen <b>actualizadas</b>, no duplicadas, y
+            conservan tu marca de <b>Genera factura</b>.</li>
+        <li>Repasa una por una qué etapas tienen marcado <b>Genera factura</b>. Esta es la lista
+            que decide qué factura y qué no.</li>
+      </ul>
+    </div>
+    <p class="note">Si el token no tiene permisos suficientes, el error de la API se muestra
+      íntegro, con el código HTTP y el cuerpo de la respuesta. El módulo reintenta ante 429 y
+      errores 5xx, hasta cuatro veces con espera creciente.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t12"><label for="t12">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">13</span>
+    <div class="title">
+      <h3>Resolver de una vez si <code>discount</code> es importe o porcentaje</h3>
+      <div class="sub">Una sola llamada decide</div>
+    </div>
+    <div class="chips"><span class="chip time">15 min</span><span class="chip care">Solo lectura</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Busca en HubSpot un negocio con un ítem de línea que tenga descuento y apunta el id del
+          ítem.</li>
+      <li>Léelo por la API:</li>
+    </ol>
+    <pre><code>curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://api.hubapi.com/crm/v3/objects/line_items/&lt;id&gt;?properties=name,price,quantity,amount,discount,hs_discount_percentage"</code></pre>
+    <div class="expect">
+      <p class="label">Cómo interpretarlo</p>
+      <p>Compara <code>amount</code> con el bruto <code>price × quantity</code>:</p>
+      <ul>
+        <li>Si <b>amount = bruto − discount</b> → <code>discount</code> es un <b>importe</b>. Deja
+            la casilla de Ajustes desmarcada (es el valor por defecto).</li>
+        <li>Si <b>amount = bruto × (1 − discount/100)</b> → es un <b>porcentaje</b>. Marca
+            <b>La propiedad 'discount' es un porcentaje</b>.</li>
+      </ul>
+      <p>Si el ítem trae <code>hs_discount_percentage</code>, esa manda siempre y se usa tal cual;
+         la duda solo afecta a los ítems donde solo viene <code>discount</code>.</p>
+    </div>
+    <p class="note">Merece la pena mirar dos o tres ítems de negocios distintos antes de decidir.
+      Un descuento mal interpretado cambia el importe de todas las facturas que genere el puente,
+      y es el tipo de error que no se ve hasta que alguien cuadra un mes.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t13"><label for="t13">Prueba superada</label></div>
+</article>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">14</span>
+    <div class="title">
+      <h3>Facturar un negocio real y revisar el resultado</h3>
+      <div class="sub">Con el cron desactivado, procesando a mano</div>
+    </div>
+    <div class="chips"><span class="chip time">30 min</span><span class="chip danger">Crea datos reales</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li><b>Desactiva</b> el cron de procesar eventos, para controlar cuándo ocurre cada cosa.</li>
+      <li>Elige en HubSpot un negocio ganado que tenga empresa asociada e ítems de línea, y apunta
+          su id.</li>
+      <li>Copia el payload de ejemplo, pon ese id en <code>objectId</code>, un
+          <code>eventId</code> nuevo y el valor de etapa que corresponda. Envíalo firmado con el
+          client secret real.</li>
+      <li>Abre el evento y pulsa <b>Procesar ahora</b>.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué revisar en la factura creada</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Aspecto</th><th>Qué debe verse</th></tr></thead>
+          <tbody>
+            <tr><td>Estado</td><td>Borrador, siempre</td></tr>
+            <tr><td>Cliente</td><td>La <b>empresa</b> asociada al negocio, no el contacto</td></tr>
+            <tr><td>Compañía y diario</td><td>Los del mapeo de localización que corresponda</td></tr>
+            <tr><td>Moneda</td><td>La del negocio si existe en Odoo; si no, la de respaldo, con aviso en el log</td></tr>
+            <tr><td>Líneas</td><td>Una por ítem de línea, con cantidad, precio y descuento</td></tr>
+            <tr><td>Impuestos</td><td>Los calcula Odoo por producto y posición fiscal. <b>Revísalos</b>: no vienen de HubSpot</td></tr>
+            <tr><td>Nota interna</td><td>Cotizaciones aprobadas, categoría, fecha de cierre</td></tr>
+            <tr><td>Referencia</td><td>Nombre del negocio, y <code>invoice_origin</code> con el prefijo HubSpot</td></tr>
+            <tr><td>Mensaje</td><td>Una nota en el chatter indicando el negocio de origen</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Si el cliente no existía, se habrá creado, con el NIT en <b>Identificación fiscal</b>. Si
+         el NIT no pasó la validación de Odoo, el cliente se crea igualmente <b>sin</b> él y queda
+         un mensaje en su ficha explicándolo. Complétalo antes de validar nada.</p>
+    </div>
+    <h3>Los dos fallos que hay que provocar a propósito</h3>
+    <p>Elige un negocio <b>sin empresa asociada</b> y otro con un <b>producto no homologado</b>:</p>
+    <ul>
+      <li>Sin empresa → error: «no tiene ninguna empresa asociada … Asocie la empresa en HubSpot y
+          reprocese este evento».</li>
+      <li>Producto sin homologar → error con la lista de productos afectados, su SKU y su
+          <code>hs_product_id</code>. <b>No</b> se crea una factura a medias.</li>
+    </ul>
+    <p class="note">Tras homologar el producto en Odoo —por referencia interna igual al SKU, o por
+      nombre exacto— pulsa <b>Reintentar</b> y luego <b>Procesar</b>. Debe crear la factura, y el
+      producto se queda vinculado por <code>hs_product_id</code> para la próxima vez. El módulo
+      nunca crea productos.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t14"><label for="t14">Prueba superada</label></div>
+</article>
+
+<!-- ════════════════ FASE 5 ════════════════ -->
+
+<div class="phase">
+  <span class="tag">Fase 5</span>
+  <span class="need">Requiere el proxy inverso HTTPS. Hoy bloqueada.</span>
+</div>
+
+<article class="test">
+  <div class="head">
+    <span class="idx">15</span>
+    <div class="title">
+      <h3>De extremo a extremo, moviendo un negocio en HubSpot</h3>
+      <div class="sub">La prueba que cierra el proyecto</div>
+    </div>
+    <div class="chips"><span class="chip time">30 min</span><span class="chip danger">Producción</span></div>
+  </div>
+  <div class="body">
+    <p class="label">Qué hacer</p>
+    <ol>
+      <li>Monta el proxy inverso con certificado y publica Odoo en un dominio propio.</li>
+      <li>En Ajustes, escribe ese dominio en <b>URL pública del webhook</b>,
+          <b>exactamente</b> como figurará en HubSpot: mismo esquema, mismo dominio, sin barra
+          final.</li>
+      <li>Copia el valor de <b>Target URL a registrar en HubSpot</b> y regístralo en la private
+          app, suscribiendo <code>deal.propertyChange</code> sobre la propiedad
+          <code>dealstage</code>.</li>
+      <li>Reactiva el cron de procesar eventos.</li>
+      <li>Mueve un negocio de prueba a la etapa ganada.</li>
+    </ol>
+    <div class="expect">
+      <p class="label">Qué debe pasar</p>
+      <p>El evento aparece solo en la cola en segundos, y la factura en borrador dentro de los dos
+         minutos siguientes. En HubSpot, el registro de entregas del webhook debe mostrar 200.</p>
+    </div>
+    <p class="note">Si HubSpot registra 401, el sospechoso número uno es la URL: la firma se
+      calcula sobre la URL <em>original</em>, y detrás del proxy Odoo ve otra. Un
+      <code>https</code> por <code>http</code>, un <code>www</code> de más o una barra final
+      bastan para que no cuadre. Es el fallo más habitual de esta integración.</p>
+  </div>
+  <div class="foot"><input type="checkbox" id="t15"><label for="t15">Prueba superada</label></div>
+</article>
+
+<!-- ════════════════ ANEXOS ════════════════ -->
+
+<section>
+  <h2>Anexo A · Los estados de la cola</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Estado</th><th>Qué significa</th><th>Qué hacer</th></tr></thead>
+      <tbody>
+        <tr><td><span class="state pending">Pendiente</span></td><td>Encolado, esperando al cron</td><td>Nada, o <b>Procesar ahora</b></td></tr>
+        <tr><td><span class="state skipped">Descartado</span></td><td>No procedía facturar</td><td>Nada. El motivo está en el detalle</td></tr>
+        <tr><td><span class="state done">Procesado</span></td><td>Factura creada, o ya existía</td><td>Revisar la factura</td></tr>
+        <tr><td><span class="state error">Error</span></td><td>Falló. Hasta 5 intentos</td><td>Corregir la causa y pulsar <b>Reintentar</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2>Anexo B · Consultas de apoyo</h2>
+  <pre><code>PGPASSWORD=odoo psql -h 127.0.0.1 -U odoo -d OV18_INTELLIDM</code></pre>
+  <h3>Cómo va la cola</h3>
+  <pre><code>SELECT state, COUNT(*) FROM hubspot_webhook_event GROUP BY state;</code></pre>
+  <h3>Eventos atascados</h3>
+  <pre><code>SELECT hubspot_event_id, object_id, attempts, LEFT(error_message, 120)
+FROM   hubspot_webhook_event
+WHERE  state = 'error'
+ORDER  BY attempts DESC;</code></pre>
+  <h3>Facturas generadas por el puente</h3>
+  <pre><code>SELECT m.name, m.state, m.hubspot_deal_id, p.name AS cliente
+FROM   account_move m
+JOIN   res_partner p ON p.id = m.partner_id
+WHERE  m.hubspot_deal_id IS NOT NULL
+ORDER  BY m.id DESC;</code></pre>
+  <h3>Qué credenciales hay puestas, sin enseñarlas</h3>
+  <pre><code>SELECT key, LENGTH(value) AS caracteres
+FROM   ir_config_parameter
+WHERE  key LIKE 'hubspot%';</code></pre>
+  <h3>Limpiar los eventos de prueba al terminar</h3>
+  <pre><code>DELETE FROM hubspot_webhook_event WHERE object_id IN ('987654321', '111222333');</code></pre>
+</section>
+
+<section>
+  <h2>Anexo C · Antes de dar por buena la producción</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Comprobación</th><th>Por qué</th></tr></thead>
+      <tbody>
+        <tr><td>Token viejo revocado y fuera del disco</td><td>No caduca solo</td></tr>
+        <tr><td><b>Validar la firma</b> activado</td><td>Sin ella, quien conozca la URL provoca facturas</td></tr>
+        <tr><td>URL pública idéntica a la Target URL</td><td>La firma se calcula sobre ella</td></tr>
+        <tr><td>Una localización predeterminada</td><td>Si no, todo lo no mapeado queda en error</td></tr>
+        <tr><td>Etapas «Genera factura» revisadas una a una</td><td>Deciden qué se factura</td></tr>
+        <tr><td>Descuento confirmado (prueba 13)</td><td>Altera el importe facturado</td></tr>
+        <tr><td>Responsable de incidencias asignado</td><td>Si no, los errores no avisan a nadie</td></tr>
+        <tr><td>Impuestos revisados en las primeras facturas</td><td>No vienen de HubSpot</td></tr>
+        <tr><td>Decidido si se usa la escritura de vuelta</td><td>Escribe en el CRM real</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <p>hubspot_invoice_bridge · Intelli Next · El script de firma y el payload de ejemplo están en
+     <code>custom_addons/hubspot_invoice_bridge/doc/</code>.</p>
+</footer>
+
+</div>
+
+<script>
+  (function () {
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('.foot input[type=checkbox]'));
+    var count = document.getElementById('count');
+    var bar = document.getElementById('bar');
+    var KEY = 'hubspot_bridge_pruebas';
+
+    function render() {
+      var done = boxes.filter(function (b) { return b.checked; }).length;
+      count.textContent = done + ' / ' + boxes.length;
+      bar.style.width = (done / boxes.length * 100) + '%';
+    }
+
+    function save() {
+      var state = {};
+      boxes.forEach(function (b) { state[b.id] = b.checked; });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    }
+
+    try {
+      var saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+      boxes.forEach(function (b) { if (saved[b.id]) b.checked = true; });
+    } catch (e) {}
+
+    boxes.forEach(function (b) {
+      b.addEventListener('change', function () { save(); render(); });
+    });
+
+    document.getElementById('reset').addEventListener('click', function () {
+      boxes.forEach(function (b) { b.checked = false; });
+      save(); render();
+    });
+
+    render();
+  })();
+</script>

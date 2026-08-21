@@ -6,14 +6,14 @@
         <field name="model">hubspot.location.mapping</field>
         <field name="arch" type="xml">
             <list string="Localizaciones" editable="bottom">
-                <field name="sequence" widget="handle"/>
-                <field name="name"/>
-                <field name="hubspot_value"/>
-                <field name="company_id"/>
-                <field name="journal_id"/>
-                <field name="fiscal_position_id" optional="show"/>
-                <field name="currency_id" optional="show"/>
-                <field name="is_default"/>
+                <field name="sequence" widget="handle" />
+                <field name="name" />
+                <field name="hubspot_value" />
+                <field name="company_id" />
+                <field name="journal_id" />
+                <field name="fiscal_position_id" optional="show" />
+                <field name="currency_id" optional="show" />
+                <field name="is_default" />
             </list>
         </field>
     </record>
@@ -25,33 +25,33 @@
             <form string="Localización">
                 <sheet>
                     <div class="oe_title">
-                        <label for="name"/>
-                        <h1><field name="name" placeholder="p. ej. Ventas Colombia"/></h1>
+                        <label for="name" />
+                        <h1>
+                            <field name="name" placeholder="p. ej. Ventas Colombia" />
+                        </h1>
                     </div>
                     <group>
                         <group string="Origen en HubSpot">
                             <field name="hubspot_value"
-                                   placeholder="p. ej. default o 793842865"/>
-                            <field name="is_default"/>
-                            <field name="active" invisible="1"/>
+                                placeholder="p. ej. default o 793842865" />
+                            <field name="is_default" />
+                            <field name="active" invisible="1" />
                         </group>
                         <group string="Destino en Odoo">
                             <field name="company_id"
-                                   options="{'no_create': True}"/>
+                                options="{'no_create': True}" />
                             <field name="journal_id"
-                                   options="{'no_create': True}"/>
+                                options="{'no_create': True}" />
                             <field name="fiscal_position_id"
-                                   options="{'no_create': True}"/>
+                                options="{'no_create': True}" />
                             <field name="currency_id"
-                                   options="{'no_create': True}"/>
+                                options="{'no_create': True}" />
                         </group>
                     </group>
-                    <div class="text-muted">
-                        El <b>valor en HubSpot</b> es el que trae la propiedad del
-                        negocio configurada en Ajustes (por defecto
-                        <code>pipeline</code>). Marque una única línea como
-                        predeterminada para los negocios cuyo valor no esté mapeado.
-                    </div>
+                    <div class="text-muted"> El <b>valor en HubSpot</b> es el que trae la propiedad
+                        del negocio configurada en Ajustes (por defecto <code>pipeline</code>).
+                        Marque una única línea como predeterminada para los negocios cuyo valor no
+                        esté mapeado. </div>
                 </sheet>
             </form>
         </field>
@@ -64,7 +64,7 @@
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Defina por dónde se factura</p>
             <p>Cada línea traduce un valor de HubSpot a la compañía, el diario y
-               la posición fiscal con los que se emitirá la factura.</p>
+                la posición fiscal con los que se emitirá la factura.</p>
         </field>
     </record>
 

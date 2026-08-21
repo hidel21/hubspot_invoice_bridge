@@ -1,0 +1,15 @@
+[
+  {
+    "eventId": 100000001,
+    "subscriptionId": 3234934,
+    "portalId": 21830287,
+    "appId": 1160452,
+    "occurredAt": 1786924800000,
+    "subscriptionType": "deal.propertyChange",
+    "attemptNumber": 0,
+    "objectId": 987654321,
+    "propertyName": "dealstage",
+    "propertyValue": "closedwon",
+    "changeSource": "CRM"
+  }
+]

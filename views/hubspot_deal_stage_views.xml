@@ -6,16 +6,16 @@
         <field name="model">hubspot.deal.stage</field>
         <field name="arch" type="xml">
             <list string="Etapas de HubSpot" editable="bottom"
-                  decoration-success="trigger_invoice">
-                <field name="pipeline_label" readonly="1"/>
-                <field name="label" readonly="1"/>
-                <field name="stage_id" readonly="1"/>
-                <field name="probability" readonly="1" optional="show"/>
-                <field name="is_closed" readonly="1" optional="hide"/>
-                <field name="is_won" readonly="1"/>
-                <field name="trigger_invoice"/>
-                <field name="pipeline_id" column_invisible="1"/>
-                <field name="display_order" column_invisible="1"/>
+                decoration-success="trigger_invoice">
+                <field name="pipeline_label" readonly="1" />
+                <field name="label" readonly="1" />
+                <field name="stage_id" readonly="1" />
+                <field name="probability" readonly="1" optional="show" />
+                <field name="is_closed" readonly="1" optional="hide" />
+                <field name="is_won" readonly="1" />
+                <field name="trigger_invoice" />
+                <field name="pipeline_id" column_invisible="1" />
+                <field name="display_order" column_invisible="1" />
             </list>
         </field>
     </record>
@@ -25,16 +25,16 @@
         <field name="model">hubspot.deal.stage</field>
         <field name="arch" type="xml">
             <search string="Etapas de HubSpot">
-                <field name="label"/>
-                <field name="stage_id"/>
-                <field name="pipeline_label"/>
+                <field name="label" />
+                <field name="stage_id" />
+                <field name="pipeline_label" />
                 <filter name="filter_trigger" string="Generan factura"
-                        domain="[('trigger_invoice', '=', True)]"/>
+                    domain="[('trigger_invoice', '=', True)]" />
                 <filter name="filter_won" string="Ganadas según HubSpot"
-                        domain="[('is_won', '=', True)]"/>
+                    domain="[('is_won', '=', True)]" />
                 <group expand="0" string="Agrupar por">
                     <filter name="group_pipeline" string="Pipeline"
-                            context="{'group_by': 'pipeline_label'}"/>
+                        context="{'group_by': 'pipeline_label'}" />
                 </group>
             </search>
         </field>
@@ -46,15 +46,14 @@
         <field name="view_mode">list</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Sincronice las etapas desde HubSpot</p>
-            <p>Cada pipeline tiene su propia etapa de cierre ganado con un
-               identificador distinto. Marque en <b>Genera factura</b> las etapas
-               que deben disparar la facturación.</p>
+            <p>Cada pipeline tiene su propia etapa de cierre ganado con un identificador distinto.
+                Marque en <b>Genera factura</b> las etapas que deben disparar la facturación.</p>
         </field>
     </record>
 
     <record id="hubspot_deal_stage_action_sync" model="ir.actions.server">
         <field name="name">Sincronizar etapas desde HubSpot</field>
-        <field name="model_id" ref="model_hubspot_deal_stage"/>
+        <field name="model_id" ref="model_hubspot_deal_stage" />
         <field name="state">code</field>
         <field name="code">action = model.action_sync_from_hubspot()</field>
     </record>
