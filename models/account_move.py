@@ -12,6 +12,16 @@ class AccountMove(models.Model):
         help="Identificador del negocio de HubSpot que originó esta factura. "
         "Garantiza que un mismo negocio no se facture dos veces.",
     )
+
+    hubspot_quote_id = fields.Char(
+        string="Cotización de HubSpot",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Cotización que disparó esta factura, cuando el proceso arranca "
+        "en la firma y no en la etapa del negocio. Vacío si facturó el "
+        "negocio directamente.",
+    )
     hubspot_portal_id = fields.Char(
         string="Portal de HubSpot", copy=False, readonly=True
     )

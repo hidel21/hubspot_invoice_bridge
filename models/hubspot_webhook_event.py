@@ -49,6 +49,26 @@ CONTACT_PROPERTIES = [
     "mobilephone",
     "jobtitle",
 ]
+# Nombres tomados del inventario de propiedades de cotización de HubSpot, no
+# supuestos: la firma no vive en una sola propiedad. Una cotización puede
+# quedar firmada a mano (`hs_manually_signed`) o electrónicamente, y en ese
+# caso lo que hay que mirar es cuántos firmantes han completado frente a
+# cuántos se exigían.
+QUOTE_PROPERTIES = [
+    "hs_title",
+    "hs_status",
+    "hs_quote_number",
+    "hs_quote_amount",
+    "hs_expiration_date",
+    "hs_payment_status",
+    "hs_quote_esign_status",
+    "hs_esign_enabled",
+    "hs_esign_num_signers_required",
+    "hs_esign_num_signers_completed",
+    "hs_manually_signed",
+    "hubspot_owner_id",
+]
+
 LINE_ITEM_PROPERTIES = [
     "name",
     "price",
@@ -89,6 +109,20 @@ class HubspotWebhookEvent(models.Model):
     property_value = fields.Char(string="Valor nuevo", readonly=True)
     occurred_at = fields.Datetime(string="Ocurrido el", readonly=True)
     portal_id = fields.Char(string="Portal", readonly=True)
+    # HubSpot dispara el evento también al CREAR un negocio que nace con una
+    # etapa asignada. changeSource es lo que distingue esa alta de una
+    # transición real, y por eso se guarda aunque hoy solo se consulte para
+    # descartar orígenes concretos.
+    change_source = fields.Char(string="Origen del cambio", readonly=True)
+    # Las suscripciones genéricas —las que permiten escuchar cotizaciones—
+    # llegan como «object.propertyChange» y dicen de qué objeto hablan aquí.
+    object_type_id = fields.Char(string="Tipo de objeto", readonly=True)
+    deal_id = fields.Char(
+        string="Negocio resuelto",
+        readonly=True,
+        help="Cuando el evento es de una cotización, el negocio al que "
+        "pertenece. Para los eventos de negocio coincide con el objeto.",
+    )
     payload = fields.Text(string="Payload recibido", readonly=True)
 
     state = fields.Selection(
@@ -170,6 +204,8 @@ class HubspotWebhookEvent(models.Model):
                 "property_value": raw.get("propertyValue"),
                 "occurred_at": occurred_at,
                 "portal_id": str(raw.get("portalId") or ""),
+                "change_source": raw.get("changeSource"),
+                "object_type_id": str(raw.get("objectTypeId") or ""),
                 "payload": json.dumps(raw, indent=2, ensure_ascii=False),
             }
 
@@ -241,34 +277,46 @@ class HubspotWebhookEvent(models.Model):
         return True
 
     def _do_process(self):
-        """Lógica de negocio. Devuelve los valores de cierre del evento."""
+        """Lógica de negocio. Devuelve los valores de cierre del evento.
+
+        El evento solo sirve para despertar: la decisión se toma leyendo el
+        **estado actual** del negocio en HubSpot, no lo que traía el webhook.
+        Es lo que hace que el orden de llegada deje de importar. Si facturar
+        exige etapa ganada *y* cotización firmada, da igual cuál de las dos
+        ocurra primero: cuando llegue la segunda, la consulta verá las dos.
+        """
         self.ensure_one()
 
-        if self.property_name != "dealstage":
+        origen_ignorado = self._change_source_ignored()
+        if origen_ignorado:
             return {
                 "state": "skipped",
                 "error_message": _(
-                    "La propiedad '%s' no es 'dealstage'.", self.property_name or ""
+                    "Origen del cambio '%s': no se factura.", origen_ignorado
                 ),
             }
 
-        if not self.env["hubspot.deal.stage"].stage_triggers_invoice(
-            self.property_value
-        ):
+        deal_id = self._resolve_deal_id()
+        if not deal_id:
             return {
                 "state": "skipped",
                 "error_message": _(
-                    "La etapa '%s' no genera factura.", self.property_value or ""
+                    "El evento no corresponde a un negocio ni a una cotización "
+                    "asociada a uno (tipo '%s', objeto '%s').",
+                    self.subscription_type or "?",
+                    self.object_type_id or "?",
                 ),
             }
+        if deal_id != self.deal_id:
+            self.deal_id = deal_id
 
         # Idempotencia de negocio: aunque lleguen dos eventos distintos para el
-        # mismo negocio (reintentos, idas y venidas entre etapas), sólo se
-        # factura una vez.
+        # mismo negocio (reintentos, idas y venidas entre etapas, un cambio en
+        # su cotización), sólo se factura una vez.
         existing = (
             self.env["account.move"]
             .sudo()
-            .search([("hubspot_deal_id", "=", self.object_id)], limit=1)
+            .search([("hubspot_deal_id", "=", deal_id)], limit=1)
         )
         if existing:
             return {
@@ -281,7 +329,30 @@ class HubspotWebhookEvent(models.Model):
                 ),
             }
 
-        move = self._create_invoice()
+        client = self.env["hubspot.client"]
+        deal = client.get_object("deals", deal_id, properties=DEAL_PROPERTIES)
+        if not deal:
+            return {
+                "state": "error",
+                "error_message": _(
+                    "El negocio %s no existe en HubSpot o el token no tiene "
+                    "acceso a él.", deal_id
+                ),
+            }
+        deal_props = deal.get("properties") or {}
+
+        motivo, quote_id = self._invoice_reason(deal_id, deal_props)
+        if not motivo:
+            return {
+                "state": "skipped",
+                "error_message": _(
+                    "El negocio %s todavía no cumple la condición para "
+                    "facturar.", deal_id
+                ),
+            }
+
+        move = self._create_invoice(deal_id, deal_props, quote_id=quote_id)
+        move.message_post(body=_("Facturado desde HubSpot: %s", motivo))
         return {
             "state": "done",
             "move_id": move.id,
@@ -290,28 +361,204 @@ class HubspotWebhookEvent(models.Model):
         }
 
     # ------------------------------------------------------------------
+    # Qué evento nos despierta y sobre qué negocio
+    # ------------------------------------------------------------------
+
+    def _change_source_ignored(self):
+        """Orígenes de cambio que no deben facturar.
+
+        HubSpot dispara el mismo evento cuando alguien mueve un negocio a mano
+        y cuando una importación masiva reescribe mil de golpe. Lo segundo no
+        debería generar mil facturas.
+        """
+        crudos = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("hubspot_invoice_bridge.ignored_change_sources", "IMPORT")
+        )
+        ignorados = {x.strip().upper() for x in crudos.split(",") if x.strip()}
+        actual = (self.change_source or "").upper()
+        return actual if actual and actual in ignorados else False
+
+    def _resolve_deal_id(self):
+        """El negocio del que habla este evento.
+
+        Puede venir por tres caminos: la suscripción clásica ``deal.*``, la
+        genérica ``object.*`` con su ``objectTypeId``, o un evento de
+        cotización —del que hay que subir al negocio asociado, porque es ahí
+        donde vive la factura—.
+        """
+        tipo = (self.subscription_type or "").lower()
+        deals_type = self._object_type_id("deals", "0-3")
+        quotes_type = self._object_type_id("quotes", "0-14")
+
+        es_negocio = tipo.startswith("deal.") or self.object_type_id == deals_type
+        es_cotizacion = tipo.startswith("quote.") or self.object_type_id == quotes_type
+
+        if es_negocio:
+            return self.object_id
+        if es_cotizacion:
+            asociados = self.env["hubspot.client"].get_associated_ids(
+                "quotes", self.object_id, "deals"
+            )
+            if not asociados:
+                return False
+            # La primaria si la hay; si no, la primera que devuelva HubSpot.
+            primaria = next((i for i, es_primaria in asociados if es_primaria), None)
+            return primaria or asociados[0][0]
+        # Sin tipo reconocible se asume negocio, que es lo que llegaba antes
+        # de existir las suscripciones genéricas.
+        return self.object_id if not self.object_type_id else False
+
+    def _object_type_id(self, nombre, por_defecto):
+        """Identificador de tipo de objeto, configurable.
+
+        HubSpot los documenta en una tabla aparte y los ha ido ampliando; no
+        se escriben en el código para que un cambio suyo no obligue a tocarlo.
+        """
+        return (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("hubspot_invoice_bridge.object_type_%s" % nombre, por_defecto)
+        )
+
+    # ------------------------------------------------------------------
+    # La condición para facturar
+    # ------------------------------------------------------------------
+
+    def _invoice_reason(self, deal_id, deal_props):
+        """¿Toca facturar este negocio? Devuelve ``(motivo, quote_id)``.
+
+        El motivo se escribe después en el historial de la factura: dentro de
+        seis meses, saber por qué se emitió vale más que el hecho de que se
+        emitiera.
+        """
+        modo = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("hubspot_invoice_bridge.trigger_mode", "stage")
+        )
+
+        etapa_ok = self._stage_is_won(deal_props)
+        marca_ok = self._deal_flag_active(deal_props)
+        quote_id = False
+        if modo in ("quote", "stage_and_quote"):
+            quote_id = self._signed_quote(deal_id)
+
+        if modo == "stage":
+            return (
+                _("negocio en etapa ganada (%s)", deal_props.get("dealstage") or "?")
+                if etapa_ok
+                else False
+            ), quote_id
+        if modo == "flag":
+            return (
+                _("cotización aprobada en el negocio") if marca_ok else False
+            ), quote_id
+        if modo == "quote":
+            return (
+                _("cotización %s firmada", quote_id) if quote_id else False
+            ), quote_id
+        if modo == "stage_and_quote":
+            if etapa_ok and quote_id:
+                return _(
+                    "etapa ganada y cotización %s firmada", quote_id
+                ), quote_id
+            return False, quote_id
+        if modo == "stage_or_flag":
+            if etapa_ok:
+                return _("negocio en etapa ganada"), quote_id
+            if marca_ok:
+                return _("cotización aprobada en el negocio"), quote_id
+            return False, quote_id
+
+        _logger.warning(
+            "hubspot: modo de disparo '%s' desconocido; no se factura.", modo
+        )
+        return False, quote_id
+
+    def _stage_is_won(self, deal_props):
+        return self.env["hubspot.deal.stage"].stage_triggers_invoice(
+            deal_props.get("dealstage")
+        )
+
+    def _deal_flag_active(self, deal_props):
+        """La propiedad del negocio que marca la cotización como aprobada.
+
+        El nombre se configura porque en el portal aparece en singular y en
+        plural según dónde se mire, y adivinarlo se traduce en no facturar
+        nunca sin que nada lo explique.
+        """
+        propiedad = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param(
+                "hubspot_invoice_bridge.deal_flag_property", "cotizacion_aprobada"
+            )
+        )
+        valor = deal_props.get(propiedad)
+        return str(valor).strip().lower() in ("true", "1", "sí", "si", "yes")
+
+    def _signed_quote(self, deal_id):
+        """Primera cotización firmada del negocio, o ``False``.
+
+        La firma no es una sola propiedad. Una cotización puede firmarse a
+        mano —y entonces basta ``hs_manually_signed``— o electrónicamente, y
+        en ese caso lo que decide es que hayan firmado todos los que tenían
+        que firmar, no que el proceso esté abierto.
+        """
+        client = self.env["hubspot.client"]
+        asociadas = client.get_associated_ids("deals", deal_id, "quotes")
+        if not asociadas:
+            return False
+
+        quotes = client.batch_read(
+            "quotes", [qid for qid, _p in asociadas], QUOTE_PROPERTIES
+        )
+        for quote in quotes:
+            props = quote.get("properties") or {}
+            if self._quote_is_signed(props):
+                return str(quote.get("id") or "")
+        return False
+
+    @api.model
+    def _quote_is_signed(self, props):
+        if str(props.get("hs_manually_signed", "")).lower() == "true":
+            return True
+        if str(props.get("hs_esign_enabled", "")).lower() == "true":
+            requeridos = self._to_float(props.get("hs_esign_num_signers_required"))
+            completados = self._to_float(props.get("hs_esign_num_signers_completed"))
+            if requeridos and completados >= requeridos:
+                return True
+        estados = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("hubspot_invoice_bridge.signed_quote_statuses", "")
+        )
+        aceptados = {x.strip().upper() for x in estados.split(",") if x.strip()}
+        if aceptados:
+            for campo in ("hs_quote_esign_status", "hs_status"):
+                if str(props.get(campo, "")).upper() in aceptados:
+                    return True
+        return False
+
+    # ------------------------------------------------------------------
     # Construcción de la factura
     # ------------------------------------------------------------------
 
-    def _create_invoice(self):
+    def _create_invoice(self, deal_id, deal_props, quote_id=False):
+        """Crea la factura en borrador a partir del negocio ya leído.
+
+        Recibe ``deal_props`` en lugar de volver a pedirlo: quien decide si
+        toca facturar ya tuvo que consultarlo, y repetir la llamada gasta
+        cuota de la API para obtener exactamente lo mismo.
+        """
         self.ensure_one()
         client = self.env["hubspot.client"]
-        deal_id = self.object_id
-
-        deal = client.get_object("deals", deal_id, properties=DEAL_PROPERTIES)
-        if not deal:
-            raise UserError(
-                _(
-                    "El negocio %s no existe en HubSpot o el token no tiene "
-                    "acceso a él.",
-                    deal_id,
-                )
-            )
-        deal_props = deal.get("properties") or {}
 
         mapping = self._resolve_location(deal_props)
         partner = self._resolve_partner(deal_id)
-        lines = self._build_invoice_lines(deal_id, mapping.company_id)
+        lines = self._build_invoice_lines(deal_id, mapping.company_id, quote_id)
 
         currency = self._resolve_currency(deal_props, mapping)
 
@@ -324,11 +571,16 @@ class HubspotWebhookEvent(models.Model):
             "invoice_origin": _("HubSpot %s", deal_props.get("dealname") or deal_id),
             "ref": deal_props.get("dealname") or False,
             "hubspot_deal_id": deal_id,
+            "hubspot_quote_id": quote_id or False,
             "hubspot_portal_id": self.portal_id or False,
             "invoice_line_ids": [Command.create(line) for line in lines],
         }
         if mapping.fiscal_position_id:
             move_vals["fiscal_position_id"] = mapping.fiscal_position_id.id
+
+        comercial = self._resolve_salesperson(deal_props)
+        if comercial:
+            move_vals["invoice_user_id"] = comercial.id
 
         narration = self._prepare_narration(deal_props)
         if narration:
@@ -622,15 +874,58 @@ class HubspotWebhookEvent(models.Model):
     # Líneas
     # ------------------------------------------------------------------
 
-    def _build_invoice_lines(self, deal_id, company):
+    def _build_invoice_lines(self, deal_id, company, quote_id=False):
+        """Las líneas a facturar, del sitio donde de verdad estén.
+
+        En HubSpot un *line item* puede colgar del negocio o de la cotización,
+        y no es lo mismo: si el equipo comercial trabaja con cotizaciones, los
+        productos están ahí y el negocio no tiene ninguno. Por eso, cuando hay
+        una cotización que ha disparado la factura, se miran primero los suyos
+        y solo se cae al negocio si no tiene.
+
+        La preferencia se puede forzar en Ajustes cuando el proceso sea
+        siempre uno de los dos, para no depender de que la asociación esté
+        bien puesta.
+        """
         client = self.env["hubspot.client"]
-        associations = client.get_associated_ids("deals", deal_id, "line_items")
+        preferencia = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("hubspot_invoice_bridge.line_items_source", "auto")
+        )
+
+        origenes = []
+        if preferencia == "deal":
+            origenes = [("deals", deal_id)]
+        elif preferencia == "quote":
+            if not quote_id:
+                raise UserError(
+                    _(
+                        "Los ajustes dicen que las líneas vienen de la "
+                        "cotización, pero el negocio %s no tiene ninguna que "
+                        "haya disparado la factura.",
+                        deal_id,
+                    )
+                )
+            origenes = [("quotes", quote_id)]
+        else:
+            origenes = ([("quotes", quote_id)] if quote_id else []) + [
+                ("deals", deal_id)
+            ]
+
+        associations = []
+        for tipo, objeto in origenes:
+            associations = client.get_associated_ids(tipo, objeto, "line_items")
+            if associations:
+                break
+
         if not associations:
             raise UserError(
                 _(
-                    "El negocio %s no tiene productos (line items) asociados en "
-                    "HubSpot, así que no hay nada que facturar.",
-                    deal_id,
+                    "Ni el negocio %(deal)s ni su cotización tienen productos "
+                    "(line items) asociados en HubSpot, así que no hay nada "
+                    "que facturar.",
+                    deal=deal_id,
                 )
             )
 
@@ -679,6 +974,40 @@ class HubspotWebhookEvent(models.Model):
             )
 
         return lines
+
+    def _resolve_salesperson(self, deal_props):
+        """El propietario del negocio en HubSpot, como comercial de la factura.
+
+        Se cruza por correo, que es el único dato que las dos plataformas
+        comparten de verdad. Sin coincidencia se devuelve vacío y la factura
+        sale sin comercial: es preferible a colgársela a quien no toca, sobre
+        todo cuando de ese campo cuelgan las comisiones.
+        """
+        owner_id = deal_props.get("hubspot_owner_id")
+        if not owner_id:
+            return self.env["res.users"].browse()
+        owner = self.env["hubspot.client"].get_owner(owner_id)
+        email = (owner.get("email") or "").strip()
+        if not email:
+            return self.env["res.users"].browse()
+        usuario = (
+            self.env["res.users"]
+            .sudo()
+            .search([("login", "=ilike", email)], limit=1)
+        )
+        if not usuario:
+            usuario = (
+                self.env["res.users"]
+                .sudo()
+                .search([("email", "=ilike", email)], limit=1)
+            )
+        if not usuario:
+            _logger.info(
+                "hubspot: el propietario %s (%s) no tiene usuario en Odoo; la "
+                "factura queda sin comercial.",
+                owner_id, email,
+            )
+        return usuario
 
     def _resolve_product(self, props, company):
         """Homologación HubSpot → Odoo.

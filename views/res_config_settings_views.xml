@@ -45,6 +45,42 @@
                         <field name="hubspot_verify_signature" />
                     </setting>
 
+                    <setting string="Cuándo se factura"
+                        help="Qué suceso de HubSpot crea la factura en borrador.">
+                        <div class="content-group mt16">
+                            <div class="row">
+                                <label for="hubspot_trigger_mode"
+                                    class="col-lg-5 o_light_label" />
+                                <field name="hubspot_trigger_mode" />
+                            </div>
+                            <div class="row"
+                                invisible="hubspot_trigger_mode not in ['flag', 'stage_or_flag']">
+                                <label for="hubspot_deal_flag_property"
+                                    class="col-lg-5 o_light_label" />
+                                <field name="hubspot_deal_flag_property"
+                                    placeholder="cotizacion_aprobada" />
+                            </div>
+                            <div class="row"
+                                invisible="hubspot_trigger_mode not in ['quote', 'stage_and_quote']">
+                                <label for="hubspot_signed_quote_statuses"
+                                    class="col-lg-5 o_light_label" />
+                                <field name="hubspot_signed_quote_statuses"
+                                    placeholder="SIGNED, APPROVED" />
+                            </div>
+                            <div class="row">
+                                <label for="hubspot_line_items_source"
+                                    class="col-lg-5 o_light_label" />
+                                <field name="hubspot_line_items_source" />
+                            </div>
+                            <div class="row">
+                                <label for="hubspot_ignored_change_sources"
+                                    class="col-lg-5 o_light_label" />
+                                <field name="hubspot_ignored_change_sources"
+                                    placeholder="IMPORT" />
+                            </div>
+                        </div>
+                    </setting>
+
                     <setting string="Propiedades de HubSpot"
                         help="Nombres internos de las propiedades que lee la integración.">
                         <div class="content-group mt16">

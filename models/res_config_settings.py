@@ -4,6 +4,61 @@ from odoo import api, fields, models
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
+    hubspot_trigger_mode = fields.Selection(
+        selection=[
+            ("stage", "El negocio llega a una etapa ganada"),
+            ("flag", "Se marca «Cotización Aprobada» en el negocio"),
+            ("quote", "Se firma una cotización del negocio"),
+            ("stage_and_quote", "Etapa ganada Y cotización firmada"),
+            ("stage_or_flag", "Etapa ganada O «Cotización Aprobada»"),
+        ],
+        string="Qué dispara la factura",
+        default="stage",
+        config_parameter="hubspot_invoice_bridge.trigger_mode",
+        help="Los tres sucesos pueden ocurrir por separado y en cualquier "
+        "orden: un negocio puede pasar a ganado sin cotización firmada, y una "
+        "cotización firmarse con el negocio aún abierto.\n\n"
+        "Cuando se exigen dos, el orden da igual: al llegar el segundo aviso "
+        "se consulta el estado actual del negocio y se ven los dos.",
+    )
+    hubspot_deal_flag_property = fields.Char(
+        string="Propiedad de «Cotización Aprobada»",
+        config_parameter="hubspot_invoice_bridge.deal_flag_property",
+        default="cotizacion_aprobada",
+        help="Nombre interno de la propiedad booleana del negocio. En el "
+        "portal aparece en singular y en plural según dónde se mire, y "
+        "equivocarse aquí se traduce en no facturar nunca sin que nada lo "
+        "explique.",
+    )
+    hubspot_line_items_source = fields.Selection(
+        selection=[
+            ("auto", "La cotización si la hay, y si no el negocio"),
+            ("deal", "Siempre del negocio"),
+            ("quote", "Siempre de la cotización"),
+        ],
+        string="De dónde salen las líneas",
+        default="auto",
+        config_parameter="hubspot_invoice_bridge.line_items_source",
+        help="En HubSpot un producto puede colgar del negocio o de la "
+        "cotización. Si el equipo comercial trabaja con cotizaciones, los "
+        "productos están ahí y el negocio no tiene ninguno.",
+    )
+    hubspot_signed_quote_statuses = fields.Char(
+        string="Estados que cuentan como firmada",
+        config_parameter="hubspot_invoice_bridge.signed_quote_statuses",
+        help="Separados por comas. Solo hace falta si vuestro proceso marca la "
+        "firma con un estado propio: la firma a mano y la electrónica "
+        "completa ya se detectan sin configurar nada.",
+    )
+    hubspot_ignored_change_sources = fields.Char(
+        string="Orígenes de cambio que no facturan",
+        config_parameter="hubspot_invoice_bridge.ignored_change_sources",
+        default="IMPORT",
+        help="HubSpot dispara el mismo evento cuando alguien mueve un negocio "
+        "a mano y cuando una importación reescribe mil de golpe. Lo segundo no "
+        "debería generar mil facturas.",
+    )
+
     hubspot_access_token = fields.Char(
         string="Access token (private app)",
         config_parameter="hubspot_invoice_bridge.access_token",

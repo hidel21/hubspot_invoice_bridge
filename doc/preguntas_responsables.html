@@ -1,0 +1,451 @@
+<title>Preguntas antes de programar HubSpot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --paper:#f4f6f7; --surface:#fff; --sunk:#eaeef0;
+    --line:#d5dcdf; --line-soft:#e5eaec;
+    --ink:#14191c; --ink-soft:#495459; --ink-faint:#6f7c82;
+    --accent:#1f6b60;
+    --bloq:#9c3520; --bloq-bg:#f8e8e4;
+    --regla:#92561a; --regla-bg:#f6ebdf;
+    --alcance:#1f6b60; --alcance-bg:#e3f0ed;
+    --f-display:"IBM Plex Serif",Georgia,serif;
+    --f-body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#12181a; --surface:#1a2225; --sunk:#212b2e;
+      --line:#2f3d41; --line-soft:#263135;
+      --ink:#e6edef; --ink-soft:#a8b6ba; --ink-faint:#7d8d92;
+      --accent:#6ec7b5;
+      --bloq:#e89584; --bloq-bg:#34201b;
+      --regla:#e0a86a; --regla-bg:#332616;
+      --alcance:#6ec7b5; --alcance-bg:#17322e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#12181a; --surface:#1a2225; --sunk:#212b2e;
+    --line:#2f3d41; --line-soft:#263135;
+    --ink:#e6edef; --ink-soft:#a8b6ba; --ink-faint:#7d8d92;
+    --accent:#6ec7b5;
+    --bloq:#e89584; --bloq-bg:#34201b;
+    --regla:#e0a86a; --regla-bg:#332616;
+    --alcance:#6ec7b5; --alcance-bg:#17322e;
+  }
+
+  body { background:var(--paper); color:var(--ink); font-family:var(--f-body);
+         font-size:16.5px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:56rem; margin:0 auto; padding:3.5rem 1.5rem 6rem;
+          display:flex; flex-direction:column; gap:2.75rem; }
+
+  .eyebrow { font-family:var(--f-mono); font-size:.72rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-faint); }
+  h1 { font-family:var(--f-display); font-weight:600; font-size:clamp(2rem,5vw,2.8rem);
+       line-height:1.12; letter-spacing:-.015em; text-wrap:balance; margin:0; }
+  .lede { font-size:1.1rem; color:var(--ink-soft); max-width:60ch; margin:0; }
+  header { display:flex; flex-direction:column; gap:.9rem; }
+
+  section { display:flex; flex-direction:column; gap:1.2rem; }
+  h2 { font-family:var(--f-display); font-weight:600; font-size:1.35rem;
+       letter-spacing:-.01em; text-wrap:balance; margin:0;
+       display:flex; align-items:baseline; gap:.7rem; flex-wrap:wrap;
+       padding-bottom:.55rem; border-bottom:2px solid var(--line); }
+  h2 .quien { font-family:var(--f-mono); font-size:.7rem; letter-spacing:.08em;
+              text-transform:uppercase; color:var(--ink-faint); font-weight:400; }
+  p { margin:0; max-width:66ch; color:var(--ink-soft); }
+  code,.mono { font-family:var(--f-mono); font-size:.875em; }
+  code { background:var(--sunk); border:1px solid var(--line-soft);
+         border-radius:3px; padding:.08em .34em; }
+
+  ol.q { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1.3rem; }
+  ol.q > li { display:grid; grid-template-columns:2.6rem 1fr; gap:0 .9rem; align-items:start; }
+  ol.q > li::before {
+    content:attr(data-n); font-family:var(--f-mono); font-size:.78rem;
+    color:var(--accent); background:var(--surface); border:1px solid var(--line);
+    border-radius:4px; width:2.3rem; height:1.9rem; display:grid; place-items:center;
+    margin-top:.1rem;
+  }
+  .q-cuerpo { display:flex; flex-direction:column; gap:.35rem; min-width:0; }
+  .pregunta { font-weight:600; color:var(--ink); }
+  .porque { font-size:.93rem; color:var(--ink-soft); }
+  .porque strong { color:var(--ink); font-weight:600; }
+
+  .marca { display:inline-flex; align-items:center; gap:.4em; font-family:var(--f-mono);
+           font-size:.65rem; letter-spacing:.07em; text-transform:uppercase;
+           padding:.15em .55em; border-radius:999px; white-space:nowrap; margin-left:.4rem; }
+  .m-bloq { color:var(--bloq); background:var(--bloq-bg); }
+
+  .note { border-left:3px solid var(--line); background:var(--surface);
+          padding:.8rem 1.05rem; border-radius:0 5px 5px 0; font-size:.93rem;
+          color:var(--ink-soft); max-width:70ch; }
+  .note strong { color:var(--ink); }
+  .note.bloq { border-left-color:var(--bloq); background:var(--bloq-bg); }
+  .note.bloq strong { color:var(--bloq); }
+
+  footer { border-top:1px solid var(--line); padding-top:1.2rem; font-family:var(--f-mono);
+           font-size:.76rem; color:var(--ink-faint); display:flex; flex-wrap:wrap; gap:.4rem 1.5rem; }
+
+  @media (max-width:600px){
+    .wrap{padding:2.5rem 1.1rem 4rem; gap:2.25rem;}
+    ol.q > li { grid-template-columns:2.1rem 1fr; gap:0 .7rem; }
+    ol.q > li::before { width:1.9rem; font-size:.72rem; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Integración HubSpot · BackOffice · Odoo</div>
+    <h1>Preguntas antes de programar</h1>
+    <p class="lede">Treinta preguntas para los responsables del sistema, ordenadas por lo que
+      bloquean. Las cinco primeras hay que responderlas antes de escribir una línea: cada una
+      cambia qué se construye, no cómo.</p>
+  </header>
+
+  <div class="note bloq">
+    <strong>Si solo hay tiempo para cinco.</strong> Las marcadas como
+    <span class="marca m-bloq">bloqueante</span> paran el desarrollo: sin ellas se programa
+    sobre una suposición, y equivocarse obliga a rehacer, no a retocar.
+  </div>
+
+  <!-- ============ DISPARADOR ============ -->
+  <section>
+    <h2>El disparador <span class="quien">Comercial · HubSpot</span></h2>
+    <p>Hoy el módulo crea la factura cuando el negocio cambia a una etapa ganada. El diagrama
+      habla de cotización firmada o del campo «Cotización Aprobada». No es lo mismo.</p>
+
+    <ol class="q">
+      <li data-n="1">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Qué suceso exacto debe crear la prefactura: la firma de la
+            cotización, la activación de «Cotización Aprobada», o el paso a Cierre Ganado?
+            <span class="marca m-bloq">bloqueante</span></div>
+          <div class="porque">Los tres pueden ocurrir por separado y en cualquier orden. Un
+            negocio puede pasar a ganado sin cotización firmada, y una cotización firmarse con el
+            negocio aún abierto. <strong>Hoy solo se mira la etapa.</strong></div>
+        </div>
+      </li>
+      <li data-n="2">
+        <div class="q-cuerpo">
+          <div class="pregunta">Si hacen falta dos condiciones a la vez, ¿qué pasa cuando llega
+            la segunda días después? ¿Se factura entonces?</div>
+          <div class="porque">Determina si basta con reaccionar a un webhook o hace falta un
+            proceso que revise negocios a la espera.</div>
+        </div>
+      </li>
+      <li data-n="3">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Cómo se llama exactamente la propiedad?</div>
+          <div class="porque">El código lee <code>cotizaciones_aprobadas</code>, en plural; el
+            diagrama la llama <code>cotizacion_aprobada</code>, en singular. Una de las dos no
+            existe.</div>
+        </div>
+      </li>
+      <li data-n="4">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Un negocio puede tener varias cotizaciones aprobadas? ¿Se
+            factura una vez por negocio o una por cotización?</div>
+          <div class="porque">Hoy la protección contra duplicados es <strong>una factura por
+            negocio</strong>. Si el proceso admite varias, esa protección impediría la
+            segunda.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ QUÉ SE FACTURA ============ -->
+  <section>
+    <h2>Qué se factura <span class="quien">Comercial · Administración</span></h2>
+
+    <ol class="q">
+      <li data-n="5">
+        <div class="q-cuerpo">
+          <div class="pregunta">En un negocio ganado real, ¿los productos cuelgan del negocio o
+            de la cotización? <span class="marca m-bloq">bloqueante</span></div>
+          <div class="porque">El módulo lee los del negocio. Si en la práctica cuelgan de la
+            cotización, <strong>la factura sale vacía y el evento da error</strong>. Se comprueba
+            en dos minutos abriendo un negocio ganado.</div>
+        </div>
+      </li>
+      <li data-n="6">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿La propiedad <code>discount</code> de las líneas es un importe o
+            un porcentaje? <span class="marca m-bloq">bloqueante</span></div>
+          <div class="porque">En la semántica estándar de HubSpot es un importe; el inventario
+            del portal la documenta como porcentaje. <strong>Equivocarse cambia lo que se
+            cobra</strong>, y en descuentos pequeños no salta a la vista.</div>
+        </div>
+      </li>
+      <li data-n="7">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Se usa <code>discount</code> en la práctica, o siempre
+            <code>hs_discount_percentage</code>?</div>
+          <div class="porque">Si nunca se usa la ambigua, la pregunta anterior deja de
+            importar.</div>
+        </div>
+      </li>
+      <li data-n="8">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Todos los productos que se cotizan existen en Odoo con SKU?</div>
+          <div class="porque">Cuando un producto no se puede homologar, el módulo
+            <strong>aborta la factura entera</strong> a propósito. Con un catálogo desalineado,
+            eso significa que casi nada se factura.</div>
+        </div>
+      </li>
+      <li data-n="9">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿El propietario del negocio en HubSpot debe llegar a la factura
+            como comercial?</div>
+          <div class="porque">Es el dato que enlazaría la integración con el módulo de
+            comisiones. Se pide a HubSpot pero hoy no se usa.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ LA PREFACTURA ============ -->
+  <section>
+    <h2>La prefactura y la primera factura <span class="quien">Administración · Contabilidad</span></h2>
+
+    <ol class="q">
+      <li data-n="10">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿«Prefactura» es una factura en borrador, o un documento
+            distinto que no debe verse como factura?</div>
+          <div class="porque">Hoy se crea una factura de cliente sin validar. Si hace falta un
+            documento aparte, es un modelo nuevo.</div>
+        </div>
+      </li>
+      <li data-n="11">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Qué datos del cliente son obligatorios antes de emitir, y debe
+            Odoo impedir la validación si faltan?</div>
+          <div class="porque">El diagrama menciona el Rut. En Colombia serían NIT, régimen y
+            responsabilidades fiscales. Sin una regla explícita, nada frena una factura
+            incompleta camino de la DIAN.</div>
+        </div>
+      </li>
+      <li data-n="12">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Quién revisa y valida la prefactura, y en qué plazo?</div>
+          <div class="porque">Define si hace falta aviso, actividad asignada o un informe de
+            pendientes.</div>
+        </div>
+      </li>
+      <li data-n="13">
+        <div class="q-cuerpo">
+          <div class="pregunta">Si el cliente no existe en Odoo, ¿se crea automáticamente o lo
+            da de alta administración?</div>
+          <div class="porque">Hoy se crea solo, con los datos de HubSpot. Eso puede llenar la
+            base de clientes a medio completar.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ BACKOFFICE ============ -->
+  <section>
+    <h2>El BackOffice <span class="quien">Responsable del BackOffice</span></h2>
+    <p>De esta parte no existe ni una línea de código. Son las preguntas que deciden si se puede
+      empezar.</p>
+
+    <ol class="q">
+      <li data-n="14">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Quién llama a quién: Odoo consulta la API del BackOffice, o el
+            BackOffice empuja los datos a Odoo? <span class="marca m-bloq">bloqueante</span></div>
+          <div class="porque">El diagrama dibuja una flecha «Get» hacia Odoo pero el texto dice
+            que «el BackOffice enviará». Son dos arquitecturas distintas: una necesita un
+            cliente HTTP y un cron, la otra un endpoint autenticado en Odoo.</div>
+        </div>
+      </li>
+      <li data-n="15">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿La API existe ya? ¿Hay documentación, entorno de pruebas y una
+            API Key que podamos usar?</div>
+          <div class="porque">Si aún no existe, el desarrollo del BackOffice es previo y marca el
+            calendario de todo lo demás.</div>
+        </div>
+      </li>
+      <li data-n="16">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Cuál es la clave que enlaza licencia, cliente y factura?</div>
+          <div class="porque">Sin un identificador estable —un id de licencia, no el nombre— ni
+            el prorrateo ni la inactivación tienen a qué agarrarse.</div>
+        </div>
+      </li>
+      <li data-n="17">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Quién es la fuente de verdad del precio: el BackOffice o Odoo?</div>
+          <div class="porque">El diagrama dice que administración actualiza precios en el
+            BackOffice. Si además se tocan en Odoo, habrá dos verdades.</div>
+        </div>
+      </li>
+      <li data-n="18">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Odoo tiene que escribir en el BackOffice, o solo leer?</div>
+          <div class="porque">Inactivar la licencia es una escritura. Cambia los permisos que
+            hay que pedir y el riesgo del desarrollo.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ REGLAS ============ -->
+  <section>
+    <h2>Las reglas del prorrateo <span class="quien">Administración · Producto</span></h2>
+    <p>Las fórmulas están escritas, pero cada una esconde una decisión que no se ve.</p>
+
+    <ol class="q">
+      <li data-n="19">
+        <div class="q-cuerpo">
+          <div class="pregunta">«Días restantes del mes»: ¿se cuenta el día de inicio? ¿Sobre
+            días naturales del mes o sobre 30 fijos?</div>
+          <div class="porque">Un día de diferencia en febrero es un 3,5% del importe.</div>
+        </div>
+      </li>
+      <li data-n="20">
+        <div class="q-cuerpo">
+          <div class="pregunta">En la modalidad elástica, ¿en qué momento se miden las licencias
+            consumidas: pico del mes, promedio, o cierre?</div>
+          <div class="porque">Sobre el mismo mes las tres dan importes distintos, y la fórmula
+            no lo dice.</div>
+        </div>
+      </li>
+      <li data-n="21">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿El primer mes se factura completo o también se prorratea?</div>
+          <div class="porque">El diagrama solo menciona el prorrateo del segundo y del
+            último.</div>
+        </div>
+      </li>
+      <li data-n="22">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Qué ocurre si el cliente cambia de modalidad o de número de
+            licencias a mitad de mes?</div>
+          <div class="porque">No aparece en el diagrama y es lo que más ocurre en la
+            práctica.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ UMBRAL ============ -->
+  <section>
+    <h2>El umbral de 100.000 <span class="quien">Administración</span></h2>
+
+    <ol class="q">
+      <li data-n="23">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿100.000 pesos colombianos siempre? ¿Antes o después de IVA?</div>
+          <div class="porque">Hay siete compañías y no todas facturan en pesos. Un umbral fijo en
+            COP aplicado a una factura en dólares no significa nada.</div>
+        </div>
+      </li>
+      <li data-n="24">
+        <div class="q-cuerpo">
+          <div class="pregunta">Si el mes siguiente tampoco llega al umbral, ¿se sigue
+            acumulando indefinidamente?</div>
+          <div class="porque">El diagrama dibuja una sola acumulación —«sumar monto acumulado más
+            tercera factura»— y no dice qué pasa a la cuarta.</div>
+        </div>
+      </li>
+      <li data-n="25">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Qué se hace con lo acumulado si la licencia se cancela antes de
+            superar el umbral?</div>
+          <div class="porque">O se factura igualmente, o se pierde. Las dos son decisiones de
+            negocio con efecto contable.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ CICLO ============ -->
+  <section>
+    <h2>El ciclo automático <span class="quien">Administración · Contabilidad</span></h2>
+
+    <ol class="q">
+      <li data-n="26">
+        <div class="q-cuerpo">
+          <div class="pregunta">«El primero del mes después de vencida la factura»: ¿vencida
+            significa que pasó su fecha de vencimiento, o que el cliente pagó?</div>
+          <div class="porque">Son cosas muy distintas cuando un cliente paga tarde, y decide si
+            se sigue facturando a quien no paga.</div>
+        </div>
+      </li>
+      <li data-n="27">
+        <div class="q-cuerpo">
+          <div class="pregunta">La factura automática, ¿se valida y se envía sola, o queda en
+            borrador para revisión? <span class="marca m-bloq">bloqueante</span></div>
+          <div class="porque">Hoy el módulo <strong>nunca valida nada</strong>, por diseño.
+            Validar automáticamente significa numerar y firmar ante la DIAN sin que nadie mire —
+            es una decisión de calado, no un detalle.</div>
+        </div>
+      </li>
+      <li data-n="28">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Cómo sabe Odoo que una factura es «la última»?</div>
+          <div class="porque">Presumiblemente por la fecha de expiración del BackOffice, pero hay
+            que confirmarlo: de ahí depende el prorrateo final y la inactivación.</div>
+        </div>
+      </li>
+      <li data-n="29">
+        <div class="q-cuerpo">
+          <div class="pregunta">La renovación —el reporte y el correo a administración— ¿la hace
+            el BackOffice? Entonces, ¿qué papel tiene Odoo?</div>
+          <div class="porque">El diagrama la sitúa en el BackOffice. Conviene dejarlo dicho para
+            no construirla dos veces.</div>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============ ALCANCE ============ -->
+  <section>
+    <h2>Alcance y accesos <span class="quien">Dirección · TI</span></h2>
+
+    <ol class="q">
+      <li data-n="30">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Se ha valorado usar Suscripciones de Odoo Enterprise en lugar de
+            programar el ciclo recurrente a mano?</div>
+          <div class="porque">Ya está pagado y resuelve renovación, prorrateo y facturación
+            periódica. Si se descarta, mejor que sea por un motivo escrito.</div>
+        </div>
+      </li>
+      <li data-n="31">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Quién monta el proxy HTTPS público y bajo qué dominio?</div>
+          <div class="porque">HubSpot exige una URL pública con certificado válido. Sin ella no
+            llega ni un webhook, y hoy no existe.</div>
+        </div>
+      </li>
+      <li data-n="32">
+        <div class="q-cuerpo">
+          <div class="pregunta">¿Hay un portal de pruebas de HubSpot, o se desarrolla contra el
+            de producción?</div>
+          <div class="porque">Probar contra producción significa crear negocios y cotizaciones
+            reales para ver si el código funciona.</div>
+        </div>
+      </li>
+    </ol>
+
+    <div class="note bloq">
+      <strong>Y una que no es pregunta.</strong> El token de HubSpot está escrito en claro en
+      <code>/opt/18.0e/guia-hubspot-webhooks-api.md</code>. Hay que revocarlo, se decida lo que
+      se decida sobre todo lo demás.
+    </div>
+  </section>
+
+  <footer>
+    <span>hubspot_invoice_bridge 18.0.1.0.0</span>
+    <span>32 preguntas · 6 bloqueantes</span>
+    <span>Hidelberg Martinez</span>
+  </footer>
+
+</div>

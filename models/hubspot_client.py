@@ -197,6 +197,27 @@ class HubspotClient(models.AbstractModel):
     # ------------------------------------------------------------------
 
     @api.model
+    def get_owner(self, owner_id):
+        """Propietario de HubSpot, para poder traducirlo a un usuario de Odoo.
+
+        Los owners no viven bajo ``/crm/v3/objects`` sino en su propio
+        endpoint, así que no sirve ``get_object``. Devuelve ``{}`` si no
+        existe en lugar de reventar: que un negocio tenga un propietario dado
+        de baja no debe impedir facturarlo.
+        """
+        if not owner_id:
+            return {}
+        try:
+            return self._request("GET", "/crm/v3/owners/%s" % owner_id) or {}
+        except Exception:  # noqa: BLE001
+            _logger.warning(
+                "hubspot: no se pudo leer el propietario %s; la factura se "
+                "creará sin comercial asignado.",
+                owner_id,
+            )
+            return {}
+
+    @api.model
     def get_deal_pipelines(self):
         data = self._request("GET", "/crm/v3/pipelines/deals") or {}
         return data.get("results") or []

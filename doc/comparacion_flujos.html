@@ -1,0 +1,393 @@
+<title>HubSpot: lo diseñado y lo construido</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --paper:#f4f6f7; --surface:#fff; --sunk:#eaeef0;
+    --line:#d5dcdf; --line-soft:#e5eaec;
+    --ink:#14191c; --ink-soft:#495459; --ink-faint:#6f7c82;
+    --accent:#1f6b60;
+    --ok:#1f6b60; --ok-bg:#e3f0ed;
+    --parcial:#92561a; --parcial-bg:#f6ebdf;
+    --falta:#9c3520; --falta-bg:#f8e8e4;
+    --f-display:"IBM Plex Serif",Georgia,serif;
+    --f-body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#12181a; --surface:#1a2225; --sunk:#212b2e;
+      --line:#2f3d41; --line-soft:#263135;
+      --ink:#e6edef; --ink-soft:#a8b6ba; --ink-faint:#7d8d92;
+      --accent:#6ec7b5;
+      --ok:#6ec7b5; --ok-bg:#17322e;
+      --parcial:#e0a86a; --parcial-bg:#332616;
+      --falta:#e89584; --falta-bg:#34201b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#12181a; --surface:#1a2225; --sunk:#212b2e;
+    --line:#2f3d41; --line-soft:#263135;
+    --ink:#e6edef; --ink-soft:#a8b6ba; --ink-faint:#7d8d92;
+    --accent:#6ec7b5;
+    --ok:#6ec7b5; --ok-bg:#17322e;
+    --parcial:#e0a86a; --parcial-bg:#332616;
+    --falta:#e89584; --falta-bg:#34201b;
+  }
+
+  body { background:var(--paper); color:var(--ink); font-family:var(--f-body);
+         font-size:16.5px; line-height:1.65; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:64rem; margin:0 auto; padding:3.5rem 1.5rem 6rem;
+          display:flex; flex-direction:column; gap:3rem; }
+
+  .eyebrow { font-family:var(--f-mono); font-size:.72rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-faint); }
+  h1 { font-family:var(--f-display); font-weight:600; font-size:clamp(2rem,5vw,2.8rem);
+       line-height:1.12; letter-spacing:-.015em; text-wrap:balance; margin:0; }
+  .lede { font-size:1.1rem; color:var(--ink-soft); max-width:62ch; margin:0; }
+  header { display:flex; flex-direction:column; gap:.9rem; }
+
+  section { display:flex; flex-direction:column; gap:1.1rem; }
+  h2 { font-family:var(--f-display); font-weight:600; font-size:1.42rem;
+       letter-spacing:-.01em; text-wrap:balance; margin:0;
+       padding-bottom:.55rem; border-bottom:2px solid var(--line); }
+  h3 { font-family:var(--f-body); font-weight:600; font-size:1rem; margin:0; }
+  p { margin:0; max-width:68ch; } p + p { margin-top:.7rem; }
+  code,.mono { font-family:var(--f-mono); font-size:.875em; }
+  code { background:var(--sunk); border:1px solid var(--line-soft);
+         border-radius:3px; padding:.08em .34em; }
+
+  /* marcador de estado */
+  .st { display:inline-flex; align-items:center; gap:.4em; font-family:var(--f-mono);
+        font-size:.68rem; letter-spacing:.06em; text-transform:uppercase;
+        padding:.2em .6em; border-radius:999px; white-space:nowrap; }
+  .st::before { content:""; width:.45em; height:.45em; border-radius:50%; background:currentColor; }
+  .st-ok { color:var(--ok); background:var(--ok-bg); }
+  .st-parcial { color:var(--parcial); background:var(--parcial-bg); }
+  .st-falta { color:var(--falta); background:var(--falta-bg); }
+
+  /* barra de cobertura */
+  .barra { display:flex; height:2.4rem; border-radius:5px; overflow:hidden;
+           border:1px solid var(--line); font-family:var(--f-mono); font-size:.72rem; }
+  .barra div { display:grid; place-items:center; color:#fff; }
+  .b-ok { background:#2b7a6d; } .b-parcial { background:#a5651f; } .b-falta { background:#9c3520; }
+  .leyenda { display:flex; flex-wrap:wrap; gap:1.2rem; font-size:.85rem; color:var(--ink-soft); }
+
+  .scroll { overflow-x:auto; border:1px solid var(--line); border-radius:6px; background:var(--surface); }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; }
+  th { text-align:left; font-family:var(--f-mono); font-weight:500; font-size:.68rem;
+       letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint);
+       padding:.75rem 1rem; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:.75rem 1rem; border-bottom:1px solid var(--line-soft); vertical-align:top; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.paso { font-family:var(--f-mono); font-size:.8rem; color:var(--ink-faint); white-space:nowrap; }
+  td.que { min-width:18rem; }
+  td.nota { color:var(--ink-soft); min-width:22rem; }
+  td.e { white-space:nowrap; }
+
+  .note { border-left:3px solid var(--line); background:var(--surface);
+          padding:.8rem 1.05rem; border-radius:0 5px 5px 0; font-size:.93rem;
+          color:var(--ink-soft); max-width:72ch; }
+  .note strong { color:var(--ink); }
+  .note.falta { border-left-color:var(--falta); background:var(--falta-bg); }
+  .note.falta strong { color:var(--falta); }
+  .note.ok { border-left-color:var(--ok); background:var(--ok-bg); }
+  .note.ok strong { color:var(--ok); }
+
+  ul.plain { margin:0; padding-left:1.15rem; display:flex; flex-direction:column; gap:.5rem; }
+  ul.plain li { color:var(--ink-soft); font-size:.95rem; }
+  ul.plain li strong { color:var(--ink); font-weight:600; }
+
+  footer { border-top:1px solid var(--line); padding-top:1.2rem; font-family:var(--f-mono);
+           font-size:.76rem; color:var(--ink-faint); display:flex; flex-wrap:wrap; gap:.4rem 1.5rem; }
+
+  @media (max-width:600px){ .wrap{padding:2.5rem 1.1rem 4rem; gap:2.25rem;} }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">hubspot_invoice_bridge 18.0.1.0.0 · 1.552 líneas</div>
+    <h1>HubSpot: lo diseñado y lo construido</h1>
+    <p class="lede">El módulo resuelve bien la entrada —del negocio ganado a la factura en
+      borrador— y ahí se detiene. Toda la mitad derecha del diagrama, la que sostiene el
+      negocio recurrente, no existe: ni BackOffice, ni licencias, ni prorrateo, ni la segunda
+      factura.</p>
+  </header>
+
+  <!-- ============ COBERTURA ============ -->
+  <section>
+    <h2>Dónde está el trabajo</h2>
+
+    <div class="barra">
+      <div class="b-ok" style="flex:3">3 hechos</div>
+      <div class="b-parcial" style="flex:2">2 a medias</div>
+      <div class="b-falta" style="flex:9">9 sin empezar</div>
+    </div>
+    <div class="leyenda">
+      <span>14 pasos en el diagrama de flujo</span>
+      <span>El módulo cubre los tres primeros</span>
+    </div>
+
+    <p>La forma de la barra es el hallazgo: no falta pulir un desarrollo casi terminado, falta
+      construir la parte más grande. Lo hecho está bien hecho —y es la parte difícil de acertar
+      en seguridad e idempotencia— pero es el principio del recorrido.</p>
+  </section>
+
+  <!-- ============ EL FLUJO ============ -->
+  <section>
+    <h2>Paso a paso del diagrama</h2>
+
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th></th><th>Lo que pide el diagrama</th><th>Estado</th><th>Lo que hay</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="paso">1</td>
+            <td class="que">Cotización firmada <em>o</em> «Cotización Aprobada» activa, con el
+              negocio en Cierre Ganado</td>
+            <td class="e"><span class="st st-parcial">A medias</span></td>
+            <td class="nota">Dispara <strong>solo</strong> con el cambio de etapa a una ganada.
+              No mira la firma de la cotización ni el campo de aprobación. Son sucesos
+              distintos: un negocio puede pasar a ganado sin cotización firmada, y al revés.</td>
+          </tr>
+          <tr>
+            <td class="paso">2</td>
+            <td class="que">Prefactura con las variables de HubSpot: empresa, NIT, correo de
+              facturación, elementos de cotización</td>
+            <td class="e"><span class="st st-ok">Hecho</span></td>
+            <td class="nota">Crea una factura de cliente en borrador con esos datos. No es una
+              «prefactura» propiamente —es un <code>account.move</code> normal sin validar—,
+              pero cumple la función.</td>
+          </tr>
+          <tr>
+            <td class="paso">3</td>
+            <td class="que">Creación de la licencia en el BackOffice</td>
+            <td class="e"><span class="st st-falta">Fuera de Odoo</span></td>
+            <td class="nota">Manual, según el propio diagrama. Nada que programar aquí, pero sí
+              que enlazar: Odoo no sabe qué licencia corresponde a qué factura.</td>
+          </tr>
+          <tr>
+            <td class="paso">4</td>
+            <td class="que">Completar datos del cliente (Rut) para poder emitir</td>
+            <td class="e"><span class="st st-parcial">A medias</span></td>
+            <td class="nota">Crea o actualiza el cliente con NIT, correo de facturación,
+              dirección, país y provincia. Lo que no hay es la <strong>retención</strong>: nada
+              impide validar una factura con datos incompletos.</td>
+          </tr>
+          <tr>
+            <td class="paso">5</td>
+            <td class="que">Generación de la primera factura en Odoo, a mano</td>
+            <td class="e"><span class="st st-ok">Hecho</span></td>
+            <td class="nota">La deja en borrador para que alguien la revise y valide. Coincide
+              con la intención.</td>
+          </tr>
+          <tr>
+            <td class="paso">6</td>
+            <td class="que">Esperar al primero del mes tras el vencimiento y preguntar al
+              BackOffice si la facturación automática está activa</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">No hay cron de facturación recurrente ni consulta al BackOffice.
+              El único cron activo procesa los webhooks pendientes cada 2 minutos.</td>
+          </tr>
+          <tr>
+            <td class="paso">7</td>
+            <td class="que">El BackOffice envía sus variables a Odoo</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">No hay cliente de API del BackOffice, ni autenticación por API
+              Key, ni modelo donde guardar lo que enviaría.</td>
+          </tr>
+          <tr>
+            <td class="paso">8</td>
+            <td class="que">¿Es anual la licencia?</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">La propiedad <code>modalidad_licencia_anual</code> se lee de
+              HubSpot, pero solo para escribirla como texto en las notas de la factura. No
+              decide nada.</td>
+          </tr>
+          <tr>
+            <td class="paso">9</td>
+            <td class="que">Prorrateo del segundo mes según la modalidad</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">Ninguna de las cuatro fórmulas está implementada. Tampoco existe
+              el concepto de modalidad como dato, solo <code>licencia_elastica</code> como
+              texto en las notas.</td>
+          </tr>
+          <tr>
+            <td class="paso">10</td>
+            <td class="que">¿El importe supera 100.000? Si no, acumular para el mes siguiente</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">No hay umbral, ni saldo acumulado, ni dónde guardarlo entre
+              facturas.</td>
+          </tr>
+          <tr>
+            <td class="paso">11</td>
+            <td class="que">Creación de la facturación automática y envío</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">El módulo <strong>nunca valida ni envía</strong> una factura,
+              por diseño. Todo queda en borrador.</td>
+          </tr>
+          <tr>
+            <td class="paso">12</td>
+            <td class="que">¿Es la última factura? Prorrateo del último mes</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">Requiere conocer fecha de inicio, expiración y renovación, que son
+              variables del BackOffice.</td>
+          </tr>
+          <tr>
+            <td class="paso">13</td>
+            <td class="que">Inactivar la licencia</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">Escritura hacia el BackOffice. Hoy solo se devuelve el número de
+              factura a HubSpot.</td>
+          </tr>
+          <tr>
+            <td class="paso">14</td>
+            <td class="que">Renovación: reporte de licencias por vencer y aviso a administración</td>
+            <td class="e"><span class="st st-falta">No existe</span></td>
+            <td class="nota">Según el diagrama lo hace el BackOffice, no Odoo. Conviene
+              confirmar de quién es.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ LAS VARIABLES ============ -->
+  <section>
+    <h2>Las variables de los dos lados</h2>
+
+    <h3>HubSpot — casi todo cubierto</h3>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Objeto</th><th>Estado</th><th>Detalle</th></tr></thead>
+        <tbody>
+          <tr><td class="que">Contacto — nombre, apellido, correo, teléfono</td>
+              <td class="e"><span class="st st-ok">Hecho</span></td>
+              <td class="nota">Opcional, se activa en Ajustes. Añade también móvil y cargo.</td></tr>
+          <tr><td class="que">Empresa — nombre, dominio, NIT, correo de facturación,
+                  representante legal</td>
+              <td class="e"><span class="st st-ok">Hecho</span></td>
+              <td class="nota">Los nombres de las propiedades del NIT y del correo son
+                  configurables, no van escritos en el código.</td></tr>
+          <tr><td class="que">Negocio — nombre, etapa, propietario, <em>Cotización Aprobada</em></td>
+              <td class="e"><span class="st st-parcial">A medias</span></td>
+              <td class="nota">Lee <code>cotizaciones_aprobadas</code> (en plural) y solo la
+                  escribe en las notas. El diagrama la llama <code>cotizacion_aprobada</code> y
+                  la usa como disparador. Hay que aclarar cuál de las dos es la buena.</td></tr>
+          <tr><td class="que">Cotización — <code>hs_title</code>, propietario</td>
+              <td class="e"><span class="st st-falta">No se usa</span></td>
+              <td class="nota">El objeto <em>quote</em> no se consulta en ningún sitio.</td></tr>
+          <tr><td class="que">Elementos de Pedido</td>
+              <td class="e"><span class="st st-parcial">A medias</span></td>
+              <td class="nota"><strong>Se leen los del negocio, no los de la cotización.</strong>
+                  En HubSpot un <em>line item</em> puede colgar de cualquiera de los dos. Si el
+                  proceso real los cuelga de la cotización, la factura saldría vacía y el evento
+                  daría error.</td></tr>
+          <tr><td class="que">Propietario (<code>hubspot_owner_id</code>)</td>
+              <td class="e"><span class="st st-falta">No se usa</span></td>
+              <td class="nota">Se pide en la consulta pero no se traduce a comercial de Odoo.
+                  Es justo el dato que enlazaría la factura con quien la comisiona.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:1.5rem">BackOffice MyIntelli — nada</h3>
+    <div class="note falta">
+      <strong>Las ocho variables del BackOffice no existen en el módulo.</strong>
+      Precio Usuario, Cantidad de Licencias, Licencias Consumidas, Modalidad, Fecha de
+      Expiración, Fecha de Inicio, Fecha de Renovación y el botón de facturación automática. No
+      hay modelo que las guarde, ni cliente que las pida, ni autenticación por API Key. El
+      módulo solo depende de <code>account</code> y solo habla con HubSpot.
+    </div>
+  </section>
+
+  <!-- ============ LO BUENO ============ -->
+  <section>
+    <h2>Lo que sí está resuelto, y bien</h2>
+
+    <p>Conviene no infravalorar la parte hecha: es la que se hace mal con más frecuencia.</p>
+
+    <ul class="plain">
+      <li><strong>Firma y anti-replay.</strong> Valida
+        <code>X-HubSpot-Signature-v3</code> con HMAC-SHA256 y descarta lo que llegue con más de
+        5 minutos.</li>
+      <li><strong>Responde rápido y procesa después.</strong> El webhook contesta en el acto y
+        el trabajo lo hace un cron cada 2 minutos, que es lo que evita que HubSpot reintente y
+        duplique.</li>
+      <li><strong>Idempotencia en dos capas.</strong> <code>eventId</code> único y
+        <code>hubspot_deal_id</code> único sobre la factura: ni los reintentos ni las idas y
+        venidas entre etapas facturan dos veces.</li>
+      <li><strong>La etapa ganada se deduce del portal.</strong> Lee los pipelines reales y mira
+        <code>metadata.isClosed</code> en lugar de comparar contra la cadena
+        <code>closedwon</code>, que habría ignorado en silencio los pipelines
+        personalizados.</li>
+      <li><strong>Homologación de productos con memoria.</strong> Busca por id de HubSpot, SKU,
+        referencia interna y nombre; cuando acierta, guarda el vínculo. Y si un producto no
+        casa, <strong>aborta la factura entera</strong> en lugar de emitirla incompleta.</li>
+      <li><strong>Multicompañía real.</strong> Una propiedad del negocio decide compañía, diario
+        y posición fiscal.</li>
+    </ul>
+  </section>
+
+  <!-- ============ RIESGOS ============ -->
+  <section>
+    <h2>Cuatro cosas abiertas antes de tocar producción</h2>
+
+    <div class="note falta">
+      <strong>La propiedad <code>discount</code>: importe o porcentaje.</strong> En la semántica
+      estándar de HubSpot es un importe; el inventario de propiedades del portal la documenta
+      como porcentaje. El código lo deja en un parámetro configurable en vez de suponerlo, pero
+      <strong>nadie ha confirmado cuál es</strong>. Equivocarse cambia el importe facturado, y
+      en descuentos pequeños pasa desapercibido.
+    </div>
+
+    <div class="note falta">
+      <strong>El token de HubSpot está expuesto</strong> en
+      <code>/opt/18.0e/guia-hubspot-webhooks-api.md</code>. Hay que rotarlo antes de conectar
+      nada.
+    </div>
+
+    <div class="note">
+      <strong>Falta el proxy HTTPS público.</strong> HubSpot exige una URL pública con
+      certificado válido para entregar los webhooks. Hoy no la hay.
+    </div>
+
+    <div class="note">
+      <strong>Los line items pueden estar en el sitio equivocado.</strong> Es la comprobación
+      más barata de todas y la que decide si el módulo funciona: coger un negocio ganado real y
+      mirar si sus productos cuelgan del negocio o de la cotización.
+    </div>
+  </section>
+
+  <!-- ============ DECIDIR ============ -->
+  <section>
+    <h2>Lo que hay que decidir</h2>
+
+    <ul class="plain">
+      <li><strong>Quién manda: el negocio o la cotización.</strong> Cambia el disparador, cambia
+        de dónde salen las líneas y cambia qué API se consulta. Es la decisión que más código
+        mueve.</li>
+      <li><strong>Si el BackOffice es alcance de este módulo o de otro.</strong> Son dos
+        integraciones distintas —proveedor distinto, autenticación distinta, ritmo distinto— y
+        hoy comparten un solo diagrama pero ningún código.</li>
+      <li><strong>Quién factura recurrente.</strong> El diagrama pone a Odoo esperando al
+        primero de mes y preguntando al BackOffice. Odoo Enterprise ya trae suscripciones; si
+        se va a construir el prorrateo a mano, conviene decidirlo a sabiendas.</li>
+      <li><strong>Dónde vive la licencia.</strong> Mientras Odoo no tenga un registro que enlace
+        factura y licencia, ni el prorrateo ni la inactivación tienen a qué agarrarse.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>hubspot_invoice_bridge 18.0.1.0.0</span>
+    <span>Análisis sobre 1.552 líneas de código</span>
+    <span>No desplegado en producción</span>
+    <span>Hidelberg Martinez</span>
+  </footer>
+
+</div>
