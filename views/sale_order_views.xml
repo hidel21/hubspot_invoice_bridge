@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- El origen de la orden, donde se mira de quién vino.
+         Mismo sitio y mismo aspecto que en la factura, para que quien revisa
+         no tenga que aprender dos pantallas. -->
+    <record id="view_order_form_hubspot" model="ir.ui.view">
+        <field name="name">sale.order.form.hubspot</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form" />
+        <field name="arch" type="xml">
+            <field name="client_order_ref" position="after">
+                <field name="hubspot_deal_id" invisible="not hubspot_deal_id"
+                       readonly="1" />
+                <field name="hubspot_quote_id" invisible="not hubspot_quote_id"
+                       readonly="1" />
+                <field name="hubspot_deal_url" invisible="1" />
+                <button name="action_open_hubspot_deal" type="object"
+                        string="Ver el negocio en HubSpot" class="btn-link"
+                        icon="fa-external-link"
+                        invisible="not hubspot_deal_url" />
+            </field>
+        </field>
+    </record>
+
+    <record id="view_sales_order_filter_hubspot" model="ir.ui.view">
+        <field name="name">sale.order.search.hubspot</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_sales_order_filter" />
+        <field name="arch" type="xml">
+            <!-- Al final del buscador y no junto a un filtro concreto: la
+                 vista de presupuestos reemplaza varios de los del base, y
+                 anclarse a uno de ellos rompe la instalación. -->
+            <xpath expr="//search" position="inside">
+                <separator />
+                <filter name="filter_desde_hubspot" string="Desde HubSpot"
+                        domain="[('hubspot_deal_id', '!=', False)]" />
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

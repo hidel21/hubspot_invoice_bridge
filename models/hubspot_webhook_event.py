@@ -146,6 +146,14 @@ class HubspotWebhookEvent(models.Model):
     move_id = fields.Many2one(
         "account.move", string="Factura generada", readonly=True, ondelete="set null"
     )
+    sale_order_id = fields.Many2one(
+        "sale.order",
+        string="Orden de venta generada",
+        readonly=True,
+        ondelete="set null",
+        help="Se genera en lugar de la factura cuando el negocio lleva "
+        "producto almacenable: es la orden la que mueve el inventario.",
+    )
     partner_id = fields.Many2one(
         "res.partner", string="Cliente", readonly=True, ondelete="set null"
     )
@@ -313,6 +321,8 @@ class HubspotWebhookEvent(models.Model):
         # Idempotencia de negocio: aunque lleguen dos eventos distintos para el
         # mismo negocio (reintentos, idas y venidas entre etapas, un cambio en
         # su cotización), sólo se factura una vez.
+        # Se miran los dos documentos posibles: un negocio puede haber
+        # generado una orden de venta en lugar de una factura.
         existing = (
             self.env["account.move"]
             .sudo()
@@ -326,6 +336,21 @@ class HubspotWebhookEvent(models.Model):
                 "error_message": _(
                     "El negocio ya tenía la factura %s; no se duplica.",
                     existing.name or existing.display_name,
+                ),
+            }
+        existing_so = (
+            self.env["sale.order"]
+            .sudo()
+            .search([("hubspot_deal_id", "=", deal_id)], limit=1)
+        )
+        if existing_so:
+            return {
+                "state": "done",
+                "sale_order_id": existing_so.id,
+                "partner_id": existing_so.partner_id.id,
+                "error_message": _(
+                    "El negocio ya tenía la orden de venta %s; no se duplica.",
+                    existing_so.name or existing_so.display_name,
                 ),
             }
 
@@ -351,14 +376,18 @@ class HubspotWebhookEvent(models.Model):
                 ),
             }
 
-        move = self._create_invoice(deal_id, deal_props, quote_id=quote_id)
-        move.message_post(body=_("Facturado desde HubSpot: %s", motivo))
-        return {
+        documento = self._create_document(deal_id, deal_props, quote_id=quote_id)
+        documento.message_post(body=_("Generado desde HubSpot: %s", motivo))
+        resultado = {
             "state": "done",
-            "move_id": move.id,
-            "partner_id": move.partner_id.id,
+            "partner_id": documento.partner_id.id,
             "error_message": False,
         }
+        if documento._name == "sale.order":
+            resultado["sale_order_id"] = documento.id
+        else:
+            resultado["move_id"] = documento.id
+        return resultado
 
     # ------------------------------------------------------------------
     # Qué evento nos despierta y sobre qué negocio
@@ -546,30 +575,147 @@ class HubspotWebhookEvent(models.Model):
     # Construcción de la factura
     # ------------------------------------------------------------------
 
-    def _create_invoice(self, deal_id, deal_props, quote_id=False):
-        """Crea la factura en borrador a partir del negocio ya leído.
+    def _create_document(self, deal_id, deal_props, quote_id=False):
+        """Crea el documento que corresponde: orden de venta o factura.
 
-        Recibe ``deal_props`` en lugar de volver a pedirlo: quien decide si
-        toca facturar ya tuvo que consultarlo, y repetir la llamada gasta
-        cuota de la API para obtener exactamente lo mismo.
+        Una factura no mueve inventario. Si el negocio lleva equipos y se
+        factura directo, el cliente se queda con un biométrico que para Odoo
+        sigue en la bodega: sin salida, sin serial asignado y sin forma de
+        rastrearlo cuando entre la garantía. El almacén se entera por el hueco
+        en el estante.
+
+        Por eso, cuando entre las líneas hay algún producto almacenable, lo que
+        nace es una **orden de venta**. Al confirmarla Odoo genera la orden de
+        entrega, y es al validarla cuando el equipo sale de existencias con su
+        número de serie. La factura viene después, desde la misma orden, y así
+        la venta, la salida y el cobro cuentan la misma historia.
+
+        Los negocios de puro licenciamiento —que son la mayoría— siguen yendo
+        directos a factura: no hay nada que descontar y pasar por una orden de
+        venta solo añadiría un paso.
         """
         self.ensure_one()
-        client = self.env["hubspot.client"]
 
         mapping = self._resolve_location(deal_props)
         partner = self._resolve_partner(deal_id)
         lines = self._build_invoice_lines(deal_id, mapping.company_id, quote_id)
-
         currency = self._resolve_currency(deal_props, mapping)
+        comercial = self._resolve_salesperson(deal_props)
+        narration = self._prepare_narration(deal_props)
+        nombre = deal_props.get("dealname") or deal_id
 
+        if self._needs_warehouse(lines):
+            documento = self._create_sale_order(
+                deal_id, quote_id, mapping, partner, lines, currency,
+                comercial, narration, nombre,
+            )
+            cuerpo = _(
+                "Orden de venta generada automáticamente desde el negocio de "
+                "HubSpot <b>%(name)s</b> (id %(id)s).<br/>"
+                "Lleva producto de almacén, así que la salida de inventario se "
+                "registra al confirmarla y entregarla; la factura se crea "
+                "desde aquí.",
+                name=nombre,
+                id=deal_id,
+            )
+        else:
+            documento = self._create_invoice(
+                deal_id, quote_id, mapping, partner, lines, currency,
+                comercial, narration, nombre,
+            )
+            cuerpo = _(
+                "Factura generada automáticamente desde el negocio de HubSpot "
+                "<b>%(name)s</b> (id %(id)s).",
+                name=nombre,
+                id=deal_id,
+            )
+
+        documento.message_post(body=cuerpo)
+        self._writeback_to_hubspot(deal_id, documento)
+        return documento
+
+    def _needs_warehouse(self, lines):
+        """¿Hay algo que descontar del almacén?
+
+        Lo decide el producto, no el nombre ni la categoría: ``is_storable`` es
+        exactamente la pregunta «¿Odoo lleva existencias de esto?». Los
+        servicios y las licencias responden que no, así que un negocio de puro
+        software no pasa por almacén.
+
+        El modo se puede forzar en Ajustes para los portales que quieran
+        siempre una cosa o siempre la otra.
+        """
+        modo = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("hubspot_invoice_bridge.document_mode", "auto")
+        )
+        if modo == "invoice":
+            return False
+        if modo == "sale_order":
+            return True
+
+        productos = self.env["product.product"].sudo().browse(
+            [l["product_id"] for l in lines if l.get("product_id")]
+        )
+        return any(productos.mapped("is_storable"))
+
+    def _create_sale_order(self, deal_id, quote_id, mapping, partner, lines,
+                           currency, comercial, narration, nombre):
+        """La orden de venta, en presupuesto. Nunca se confirma sola.
+
+        Confirmarla reserva existencias y genera la entrega, y eso es una
+        decisión de quien factura: puede que el equipo no esté, que haya que
+        partir el envío o que el pedido cambie. Se deja en presupuesto, que es
+        lo que se acordó en la reunión del 22 de septiembre.
+        """
+        vals = {
+            "partner_id": partner.id,
+            "company_id": mapping.company_id.id,
+            "currency_id": currency.id,
+            "origin": _("HubSpot %s", nombre),
+            "client_order_ref": nombre,
+            "hubspot_deal_id": deal_id,
+            "hubspot_quote_id": quote_id or False,
+            "hubspot_portal_id": self.portal_id or False,
+            "order_line": [
+                Command.create(
+                    {
+                        "product_id": line["product_id"],
+                        "name": line["name"],
+                        "product_uom_qty": line["quantity"],
+                        "price_unit": line["price_unit"],
+                        "discount": line["discount"],
+                    }
+                )
+                for line in lines
+            ],
+        }
+        if mapping.fiscal_position_id:
+            vals["fiscal_position_id"] = mapping.fiscal_position_id.id
+        if comercial:
+            vals["user_id"] = comercial.id
+        if narration:
+            vals["note"] = narration
+        return (
+            self.env["sale.order"].with_company(mapping.company_id).create(vals)
+        )
+
+    def _create_invoice(self, deal_id, quote_id, mapping, partner, lines,
+                        currency, comercial, narration, nombre):
+        """La factura, siempre en borrador.
+
+        Nunca se valida ni se contabiliza: faltan datos que se revisan a mano
+        —fecha, referencias fiscales, el cliente recién creado—.
+        """
         move_vals = {
             "move_type": "out_invoice",
             "partner_id": partner.id,
             "company_id": mapping.company_id.id,
             "journal_id": mapping.journal_id.id,
             "currency_id": currency.id,
-            "invoice_origin": _("HubSpot %s", deal_props.get("dealname") or deal_id),
-            "ref": deal_props.get("dealname") or False,
+            "invoice_origin": _("HubSpot %s", nombre),
+            "ref": nombre,
             "hubspot_deal_id": deal_id,
             "hubspot_quote_id": quote_id or False,
             "hubspot_portal_id": self.portal_id or False,
@@ -577,32 +723,13 @@ class HubspotWebhookEvent(models.Model):
         }
         if mapping.fiscal_position_id:
             move_vals["fiscal_position_id"] = mapping.fiscal_position_id.id
-
-        comercial = self._resolve_salesperson(deal_props)
         if comercial:
             move_vals["invoice_user_id"] = comercial.id
-
-        narration = self._prepare_narration(deal_props)
         if narration:
             move_vals["narration"] = narration
-
-        move = (
+        return (
             self.env["account.move"].with_company(mapping.company_id).create(move_vals)
         )
-
-        # La factura se deja SIEMPRE en borrador: falta completar datos que se
-        # editan a mano (fecha, referencias fiscales, revisión del cliente).
-        move.message_post(
-            body=_(
-                "Factura generada automáticamente desde el negocio de HubSpot "
-                "<b>%(name)s</b> (id %(id)s).",
-                name=deal_props.get("dealname") or "—",
-                id=deal_id,
-            )
-        )
-
-        self._writeback_to_hubspot(deal_id, move)
-        return move
 
     def _prepare_narration(self, deal_props):
         """Nota interna con el contexto comercial del negocio.
@@ -1114,26 +1241,35 @@ class HubspotWebhookEvent(models.Model):
     # Escritura de vuelta y avisos
     # ------------------------------------------------------------------
 
-    def _writeback_to_hubspot(self, deal_id, move):
-        """Opcional: deja constancia en el negocio de la factura creada."""
+    def _writeback_to_hubspot(self, deal_id, documento):
+        """Opcional: deja constancia en el negocio del documento creado.
+
+        Sirve para los dos: lo que le interesa al comercial que mira HubSpot es
+        el enlace, y le da igual que detrás haya una orden de venta o una
+        factura.
+        """
         param = self.env["ir.config_parameter"].sudo()
         property_name = param.get_param("hubspot_invoice_bridge.writeback_property", "")
         if not property_name:
             return
         try:
             base_url = param.get_param("web.base.url", "")
+            accion = (
+                "sale.action_quotations_with_onboarding"
+                if documento._name == "sale.order"
+                else "account.action_move_out_invoice_type"
+            )
             value = (
-                "%s/odoo/action-account.action_move_out_invoice_type/%s"
-                % (base_url.rstrip("/"), move.id)
+                "%s/odoo/action-%s/%s" % (base_url.rstrip("/"), accion, documento.id)
                 if base_url
-                else str(move.id)
+                else str(documento.id)
             )
             self.env["hubspot.client"].update_deal_properties(
                 deal_id, {property_name: value}
             )
         except Exception:  # noqa: BLE001 - accesorio
             _logger.exception(
-                "No se pudo escribir la referencia de la factura en el negocio %s",
+                "No se pudo escribir la referencia del documento en el negocio %s",
                 deal_id,
             )
 

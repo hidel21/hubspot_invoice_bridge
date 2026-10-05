@@ -15,6 +15,7 @@
                 <field name="property_value" />
                 <field name="partner_id" optional="show" />
                 <field name="move_id" optional="show" />
+                <field name="sale_order_id" optional="show" />
                 <field name="attempts" optional="hide" />
                 <field name="error_message" optional="hide" />
                 <field name="state" widget="badge"
@@ -58,6 +59,8 @@
                         <group string="Resultado">
                             <field name="partner_id" />
                             <field name="move_id" />
+                <field name="sale_order_id" />
+                            <field name="sale_order_id" />
                             <field name="attempts" />
                             <field name="processed_at" />
                         </group>

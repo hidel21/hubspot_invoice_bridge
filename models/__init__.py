@@ -3,6 +3,7 @@ from . import hubspot_deal_stage
 from . import hubspot_location_mapping
 from . import hubspot_webhook_event
 from . import account_move
+from . import sale_order
 from . import res_partner
 from . import product_product
 from . import res_config_settings

@@ -30,6 +30,27 @@ class ResConfigSettings(models.TransientModel):
         "equivocarse aquí se traduce en no facturar nunca sin que nada lo "
         "explique.",
     )
+    hubspot_document_mode = fields.Selection(
+        selection=[
+            ("auto", "Según lo que lleve: orden de venta si hay almacén"),
+            ("sale_order", "Siempre orden de venta"),
+            ("invoice", "Siempre factura"),
+        ],
+        string="Qué se crea en Odoo",
+        default="auto",
+        config_parameter="hubspot_invoice_bridge.document_mode",
+        help="Una factura no mueve inventario. Si el negocio lleva equipos y "
+        "se factura directo, el cliente se queda con un aparato que para Odoo "
+        "sigue en la bodega: sin salida, sin serial y sin rastro para la "
+        "garantía.\n\n"
+        "• Según lo que lleve: si alguna línea es un producto almacenable se "
+        "crea una orden de venta, que al confirmarse genera la entrega. Si "
+        "todo es licenciamiento o servicio, va directo a factura.\n"
+        "• Siempre orden de venta: todo pasa por Ventas, incluso el software.\n"
+        "• Siempre factura: el comportamiento anterior. El almacén no se "
+        "entera de nada.",
+    )
+
     hubspot_line_items_source = fields.Selection(
         selection=[
             ("auto", "La cotización si la hay, y si no el negocio"),

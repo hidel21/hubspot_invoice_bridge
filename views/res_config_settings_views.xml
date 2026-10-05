@@ -49,6 +49,16 @@
                         help="Qué suceso de HubSpot crea la factura en borrador.">
                         <div class="content-group mt16">
                             <div class="row">
+                                <label for="hubspot_document_mode"
+                                       class="o_light_label" />
+                                <field name="hubspot_document_mode" />
+                                <div class="text-muted">
+                                    Una factura no mueve inventario. Si el
+                                    negocio lleva equipos, lo que debe nacer es
+                                    una orden de venta: al confirmarla se
+                                    genera la entrega, y es al validarla cuando
+                                    el equipo sale del almacén con su serial.
+                                </div>
                                 <label for="hubspot_trigger_mode"
                                     class="col-lg-5 o_light_label" />
                                 <field name="hubspot_trigger_mode" />

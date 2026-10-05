@@ -1,6 +1,6 @@
 {
     "name": "HubSpot → Odoo Invoice Bridge",
-    "version": "18.0.2.0.0",
+    "version": "18.0.3.0.0",
     "summary": "Genera facturas de cliente en borrador desde negocios ganados en HubSpot",
     "description": """
 Integración HubSpot → Odoo
@@ -25,12 +25,15 @@ Características
   ninguna, el evento queda en error y se notifica al responsable.
 * Mapeo de localización: una propiedad del negocio en HubSpot determina la
   compañía, el diario y la posición fiscal con los que se factura.
+* **Los negocios con hardware generan una orden de venta, no una factura**: es
+  la orden la que mueve el inventario. Una factura directa dejaría el equipo
+  entregado y en existencias a la vez.
 """,
     "author": "Intelli-Next",
     "website": "https://intelli-next.com",
     "category": "Accounting/Accounting",
     "license": "LGPL-3",
-    "depends": ["account"],
+    "depends": ["account", "sale"],
     "data": [
         "security/hubspot_security.xml",
         "security/ir.model.access.csv",
@@ -39,6 +42,7 @@ Características
         "views/hubspot_deal_stage_views.xml",
         "views/hubspot_location_mapping_views.xml",
         "views/account_move_views.xml",
+        "views/sale_order_views.xml",
         "views/res_partner_views.xml",
         "views/product_views.xml",
         "views/res_config_settings_views.xml",
