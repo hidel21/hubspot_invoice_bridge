@@ -1,7 +1,8 @@
-# HubSpot → Odoo 18: facturación de negocios ganados
+# HubSpot → Odoo 18: negocios ganados
 
-Genera una factura de cliente **en borrador** en Odoo cuando un negocio de
-HubSpot entra en una etapa de cierre ganado.
+Genera una **cotización** (orden de venta en presupuesto) en Odoo cuando un
+negocio de HubSpot entra en una etapa de cierre ganado, con los productos de
+las cotizaciones que el negocio declara aprobadas.
 
 ## Cómo funciona
 
@@ -14,9 +15,22 @@ HubSpot ──POST /hubspot/webhook/deal──> Controller (auth público, csrf 
                                                         │
                                             ir.cron (cada 2 minutos)
                                                         │ lee negocio, empresa,
-                                                        │ contacto y line items
-                                                        └─> account.move (borrador)
+                                                        │ contacto y los productos
+                                                        │ de TODAS las cotizaciones
+                                                        │ aprobadas
+                                                        └─> sale.order (presupuesto)
 ```
+
+**Por qué una cotización y no una factura.** Una factura no mueve inventario.
+Si el negocio lleva equipos y se factura directo, el cliente se queda con un
+aparato que para Odoo sigue en la bodega: sin salida, sin serial y sin rastro
+cuando entre la garantía. La orden de venta sí lo mueve — al confirmarla se
+genera la entrega, y al validarla el equipo sale con su número de serie. La
+factura viene después, desde la misma orden.
+
+El modo se puede cambiar en Ajustes a *siempre factura* (el comportamiento
+anterior) o a *según lo que lleve*, que solo pasa por Ventas cuando hay
+producto de almacén.
 
 El webhook **no** crea la factura: HubSpot exige respuesta en unos 5 segundos y
 reintenta durante 24 h si no la recibe. Medido en este entorno, el endpoint
@@ -29,9 +43,24 @@ negocio (la marcada como primaria si hay varias). Si el negocio no tiene
 ninguna, el evento queda en estado *error* con el motivo y se crea una actividad
 para el usuario responsable configurado; no se factura a medias.
 
-**Siempre en borrador.** El módulo nunca valida ni contabiliza la factura. Falta
-completar datos que se revisan a mano (fecha, referencias fiscales, datos del
-cliente recién creado).
+**Siempre sin confirmar.** El módulo nunca confirma la orden ni contabiliza la
+factura. Confirmar reserva existencias y genera la entrega, y esa es una
+decisión de quien factura: puede que el equipo no esté o que el pedido cambie.
+
+**Un documento por negocio.** Lo pidieron así. Varias cotizaciones aprobadas se
+juntan en **uno solo**, no en uno por cotización.
+
+**Las cotizaciones aprobadas dicen cuáles son.** El campo
+`cotizaciones_aprobadas` no es un sí o un no: lleva escritas una o varias
+cotizaciones separadas por coma, y de todas ellas salen los productos y las
+cantidades. Se resuelven contra las cotizaciones asociadas al propio negocio,
+casando por número, título o identificador, de modo que un número repetido en
+otro negocio no pueda colarse.
+
+**El disparador es la etapa ganada.** HubSpot valida por dentro la firma y las
+cotizaciones aprobadas antes de mover el negocio a ganado, así que cuando el
+aviso llega aquí ya viene validado. Los otros modos siguen disponibles para
+portales donde esa validación no ocurra antes.
 
 **La etapa ganada se detecta por pipeline, no por la cadena `closedwon`.** Cada
 pipeline tiene su propio identificador de etapa ganada. En este portal:
@@ -137,16 +166,18 @@ Las marcadas con ★ son personalizadas de este portal.
 
 ### Sobre el descuento
 
-HubSpot expone dos propiedades y el inventario del portal deja la duda abierta:
+El descuento no es siempre lo mismo: a veces es un porcentaje sobre una línea,
+a veces un importe fijo, y a veces un porcentaje sobre el total de la factura.
 
 - `hs_discount_percentage` — porcentaje. Se usa tal cual, siempre que venga.
-- `discount` — en la semántica estándar de HubSpot es un **importe**, pero el
-  inventario lo documenta como porcentaje. La interpretación se controla con la
-  casilla *La propiedad `discount` es un porcentaje* en Ajustes. Por defecto se
-  trata como importe y se convierte a porcentaje.
+- `discount` — se trata como **importe** y se convierte a porcentaje de la
+  línea. La casilla *La propiedad `discount` es un porcentaje* en Ajustes
+  invierte la interpretación si el portal la usa así.
 
-**Conviene confirmar cuál de las dos usa realmente el portal** antes de pasar a
-producción, porque un descuento mal interpretado altera el importe facturado.
+**Pendiente:** el descuento sobre el total de la factura no tiene sitio todavía.
+Odoo lo aplica por línea, así que un descuento global hay que repartirlo o
+meterlo como línea aparte. Falta saber dónde lo anota HubSpot —si en la
+cotización o en el negocio— para decidir cuál de las dos.
 
 ## Impuestos
 

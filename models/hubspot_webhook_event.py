@@ -512,21 +512,29 @@ class HubspotWebhookEvent(models.Model):
         )
 
     def _deal_flag_active(self, deal_props):
-        """La propiedad del negocio que marca la cotización como aprobada.
+        """¿El negocio declara alguna cotización aprobada?
 
-        El nombre se configura porque en el portal aparece en singular y en
-        plural según dónde se mire, y adivinarlo se traduce en no facturar
-        nunca sin que nada lo explique.
+        `cotizaciones_aprobadas` **no es un sí o un no**: lleva escritas cuáles
+        son las cotizaciones aprobadas, una o varias separadas por coma. Que
+        tenga algo escrito es la aprobación.
+
+        Se siguen admitiendo los valores booleanos por si algún portal usa la
+        propiedad de la otra forma.
         """
         propiedad = (
             self.env["ir.config_parameter"]
             .sudo()
             .get_param(
-                "hubspot_invoice_bridge.deal_flag_property", "cotizacion_aprobada"
+                "hubspot_invoice_bridge.deal_flag_property",
+                "cotizaciones_aprobadas",
             )
         )
-        valor = deal_props.get(propiedad)
-        return str(valor).strip().lower() in ("true", "1", "sí", "si", "yes")
+        valor = (deal_props.get(propiedad) or "").strip()
+        if not valor:
+            return False
+        if valor.lower() in ("false", "0", "no"):
+            return False
+        return True
 
     def _signed_quote(self, deal_id):
         """Primera cotización firmada del negocio, o ``False``.
@@ -598,7 +606,9 @@ class HubspotWebhookEvent(models.Model):
 
         mapping = self._resolve_location(deal_props)
         partner = self._resolve_partner(deal_id)
-        lines = self._build_invoice_lines(deal_id, mapping.company_id, quote_id)
+        lines = self._build_invoice_lines(
+            deal_id, mapping.company_id, quote_id, deal_props
+        )
         currency = self._resolve_currency(deal_props, mapping)
         comercial = self._resolve_salesperson(deal_props)
         narration = self._prepare_narration(deal_props)
@@ -1001,62 +1011,147 @@ class HubspotWebhookEvent(models.Model):
     # Líneas
     # ------------------------------------------------------------------
 
-    def _build_invoice_lines(self, deal_id, company, quote_id=False):
-        """Las líneas a facturar, del sitio donde de verdad estén.
+    def _approved_quotes(self, deal_id, deal_props):
+        """Las cotizaciones que el negocio declara aprobadas, resueltas a ids.
 
-        En HubSpot un *line item* puede colgar del negocio o de la cotización,
-        y no es lo mismo: si el equipo comercial trabaja con cotizaciones, los
-        productos están ahí y el negocio no tiene ninguno. Por eso, cuando hay
-        una cotización que ha disparado la factura, se miran primero los suyos
-        y solo se cae al negocio si no tiene.
+        El campo ``cotizaciones_aprobadas`` dice **cuáles** de las cotizaciones
+        del negocio se aprobaron, y pueden ser varias separadas por coma. No es
+        un sí o un no: es la lista de la que hay que sacar los productos.
 
-        La preferencia se puede forzar en Ajustes cuando el proceso sea
-        siempre uno de los dos, para no depender de que la asociación esté
-        bien puesta.
+        Lo que viene escrito ahí puede ser el id interno, el número de
+        cotización o el título, según quién lo rellene. Por eso no se busca a
+        ciegas en todo el portal: se leen las cotizaciones **asociadas a este
+        negocio** y se casa cada token contra las tres cosas. Así un número
+        repetido en otro negocio no puede colarse.
         """
+        propiedad = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param(
+                "hubspot_invoice_bridge.deal_flag_property", "cotizaciones_aprobadas"
+            )
+        )
+        crudo = (deal_props.get(propiedad) or "").strip()
+        if not crudo:
+            return [], []
+
+        tokens = [t.strip() for t in crudo.replace(";", ",").split(",") if t.strip()]
+        if not tokens:
+            return [], []
+
         client = self.env["hubspot.client"]
+        asociadas = client.get_associated_ids("deals", deal_id, "quotes")
+        if not asociadas:
+            return [], tokens
+
+        ids = [qid for qid, _primary in asociadas]
+        cotizaciones = client.batch_read("quotes", ids, QUOTE_PROPERTIES)
+
+        indice = {}
+        for q in cotizaciones:
+            props = q.get("properties") or {}
+            for clave in (
+                q.get("id"),
+                props.get("hs_quote_number"),
+                props.get("hs_title"),
+            ):
+                if clave:
+                    indice[str(clave).strip().lower()] = q.get("id")
+
+        encontradas, perdidas = [], []
+        for token in tokens:
+            qid = indice.get(token.lower())
+            if qid and qid not in encontradas:
+                encontradas.append(qid)
+            elif not qid:
+                perdidas.append(token)
+        return encontradas, perdidas
+
+    def _line_item_sources(self, deal_id, quote_id, deal_props):
+        """De dónde salen los productos, en orden de preferencia.
+
+        Puede ser más de un sitio: un negocio con dos cotizaciones aprobadas
+        aporta los productos de las dos, y en Odoo se juntan en **una sola**
+        cotización. Esa fue la aclaración del equipo comercial.
+        """
         preferencia = (
             self.env["ir.config_parameter"]
             .sudo()
             .get_param("hubspot_invoice_bridge.line_items_source", "auto")
         )
-
-        origenes = []
         if preferencia == "deal":
-            origenes = [("deals", deal_id)]
-        elif preferencia == "quote":
+            return [("deals", deal_id)], []
+
+        aprobadas, perdidas = self._approved_quotes(deal_id, deal_props)
+        if perdidas:
+            raise UserError(
+                _(
+                    "El negocio %(deal)s declara como aprobadas unas "
+                    "cotizaciones que no están asociadas a él: %(perdidas)s.\n\n"
+                    "Revise el campo de cotizaciones aprobadas en HubSpot: "
+                    "debe nombrar cotizaciones del propio negocio, por su "
+                    "número, su título o su identificador.",
+                    deal=deal_id,
+                    perdidas=", ".join(perdidas),
+                )
+            )
+
+        if aprobadas:
+            return [("quotes", q) for q in aprobadas], aprobadas
+
+        # Sin campo relleno: la que disparó, y si no el negocio.
+        if preferencia == "quote":
             if not quote_id:
                 raise UserError(
                     _(
                         "Los ajustes dicen que las líneas vienen de la "
-                        "cotización, pero el negocio %s no tiene ninguna que "
-                        "haya disparado la factura.",
+                        "cotización, pero el negocio %s no declara ninguna "
+                        "aprobada ni tiene una que haya disparado el proceso.",
                         deal_id,
                     )
                 )
-            origenes = [("quotes", quote_id)]
-        else:
-            origenes = ([("quotes", quote_id)] if quote_id else []) + [
-                ("deals", deal_id)
-            ]
+            return [("quotes", quote_id)], [quote_id]
 
-        associations = []
-        for tipo, objeto in origenes:
-            associations = client.get_associated_ids(tipo, objeto, "line_items")
-            if associations:
+        fuentes = ([("quotes", quote_id)] if quote_id else []) + [("deals", deal_id)]
+        return fuentes, ([quote_id] if quote_id else [])
+
+    def _build_invoice_lines(self, deal_id, company, quote_id=False, deal_props=None):
+        """Las líneas, reunidas de todas las cotizaciones aprobadas.
+
+        Un negocio puede declarar varias cotizaciones aprobadas, y en Odoo
+        salen **en un solo documento**: el comercial no manda dos, manda una
+        con todo. Por eso aquí se recorren todas las fuentes y se acumula, en
+        lugar de parar en la primera que tenga productos.
+
+        Los impuestos no se copian de HubSpot: los pone Odoo a partir del
+        producto y la posición fiscal, que es lo único que garantiza que el IVA
+        salga como manda la localización. Por eso la línea no lleva impuesto.
+        """
+        client = self.env["hubspot.client"]
+        fuentes, _cotizaciones = self._line_item_sources(
+            deal_id, quote_id, deal_props or {}
+        )
+
+        line_item_ids = []
+        for tipo, objeto in fuentes:
+            for lid, _primary in client.get_associated_ids(tipo, objeto, "line_items"):
+                if lid not in line_item_ids:
+                    line_item_ids.append(lid)
+            # Si las fuentes son cotizaciones se suman todas. Si es el negocio,
+            # es la única que hay.
+            if line_item_ids and tipo == "deals":
                 break
 
-        if not associations:
+        if not line_item_ids:
             raise UserError(
                 _(
-                    "Ni el negocio %(deal)s ni su cotización tienen productos "
-                    "(line items) asociados en HubSpot, así que no hay nada "
-                    "que facturar.",
+                    "Ni el negocio %(deal)s ni sus cotizaciones aprobadas "
+                    "tienen productos asociados en HubSpot, así que no hay "
+                    "nada que cotizar.",
                     deal=deal_id,
                 )
             )
 
-        line_item_ids = [lid for lid, _primary in associations]
         line_items = client.batch_read(
             "line_items", line_item_ids, LINE_ITEM_PROPERTIES
         )
@@ -1090,7 +1185,7 @@ class HubspotWebhookEvent(models.Model):
             )
 
         if unmatched:
-            # Se aborta entera: una factura a medias es peor que ninguna.
+            # Se aborta entero: un documento a medias es peor que ninguno.
             raise UserError(
                 _(
                     "No se pudieron homologar estos productos de HubSpot con "

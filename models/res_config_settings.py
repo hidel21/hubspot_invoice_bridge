@@ -12,23 +12,25 @@ class ResConfigSettings(models.TransientModel):
             ("stage_and_quote", "Etapa ganada Y cotización firmada"),
             ("stage_or_flag", "Etapa ganada O «Cotización Aprobada»"),
         ],
-        string="Qué dispara la factura",
+        string="Qué dispara el documento",
         default="stage",
         config_parameter="hubspot_invoice_bridge.trigger_mode",
-        help="Los tres sucesos pueden ocurrir por separado y en cualquier "
-        "orden: un negocio puede pasar a ganado sin cotización firmada, y una "
-        "cotización firmarse con el negocio aún abierto.\n\n"
-        "Cuando se exigen dos, el orden da igual: al llegar el segundo aviso "
-        "se consulta el estado actual del negocio y se ven los dos.",
+        help="Lo habitual es «etapa ganada»: HubSpot valida por dentro la "
+        "firma y las cotizaciones aprobadas antes de mover el negocio a "
+        "ganado, así que cuando llega aquí ya viene validado.\n\n"
+        "Los otros modos existen para portales donde esa validación no ocurre "
+        "antes. Cuando se exigen dos condiciones el orden da igual: al llegar "
+        "el segundo aviso se consulta el estado actual del negocio.",
     )
     hubspot_deal_flag_property = fields.Char(
-        string="Propiedad de «Cotización Aprobada»",
+        string="Propiedad de cotizaciones aprobadas",
         config_parameter="hubspot_invoice_bridge.deal_flag_property",
-        default="cotizacion_aprobada",
-        help="Nombre interno de la propiedad booleana del negocio. En el "
-        "portal aparece en singular y en plural según dónde se mire, y "
-        "equivocarse aquí se traduce en no facturar nunca sin que nada lo "
-        "explique.",
+        default="cotizaciones_aprobadas",
+        help="Nombre interno de la propiedad del negocio que dice CUÁLES son "
+        "las cotizaciones aprobadas. No es un sí o un no: lleva una o varias "
+        "separadas por coma, por número, título o identificador.\n\n"
+        "De ahí salen los productos: si hay dos cotizaciones, el documento de "
+        "Odoo trae los artículos y las cantidades de las dos.",
     )
     hubspot_document_mode = fields.Selection(
         selection=[
@@ -37,7 +39,7 @@ class ResConfigSettings(models.TransientModel):
             ("invoice", "Siempre factura"),
         ],
         string="Qué se crea en Odoo",
-        default="auto",
+        default="sale_order",
         config_parameter="hubspot_invoice_bridge.document_mode",
         help="Una factura no mueve inventario. Si el negocio lleva equipos y "
         "se factura directo, el cliente se queda con un aparato que para Odoo "

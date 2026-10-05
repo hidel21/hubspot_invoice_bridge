@@ -1,6 +1,6 @@
 {
     "name": "HubSpot → Odoo Invoice Bridge",
-    "version": "18.0.3.0.0",
+    "version": "18.0.4.0.0",
     "summary": "Genera facturas de cliente en borrador desde negocios ganados en HubSpot",
     "description": """
 Integración HubSpot → Odoo
