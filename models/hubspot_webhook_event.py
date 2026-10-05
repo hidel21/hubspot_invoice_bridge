@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime, timezone
 
 from odoo import Command, _, api, fields, models
@@ -1011,18 +1012,34 @@ class HubspotWebhookEvent(models.Model):
     # Líneas
     # ------------------------------------------------------------------
 
+    # Formato del número de cotización de HubSpot: 20250902-164252135.
+    # Ocho dígitos de fecha, guion y una marca de tiempo. Se extrae por patrón
+    # y no partiendo por separadores porque el campo es texto libre: de los 312
+    # negocios que lo tienen relleno, unos usan coma, uno «y», uno un salto de
+    # línea, y 48 escriben alrededor —«N.° 20251008-145352484»,
+    # «Referencia: 20250621-154325838»—. Buscar el patrón los recoge todos sin
+    # tener que adivinar cómo lo escribió cada quien.
+    QUOTE_NUMBER_RE = r"\d{6,}-\d{6,}"
+
     def _approved_quotes(self, deal_id, deal_props):
         """Las cotizaciones que el negocio declara aprobadas, resueltas a ids.
 
-        El campo ``cotizaciones_aprobadas`` dice **cuáles** de las cotizaciones
-        del negocio se aprobaron, y pueden ser varias separadas por coma. No es
-        un sí o un no: es la lista de la que hay que sacar los productos.
+        El campo dice **cuáles** se aprobaron, y pueden ser varias. No es un sí
+        o un no: es la lista de la que salen los productos.
 
-        Lo que viene escrito ahí puede ser el id interno, el número de
-        cotización o el título, según quién lo rellene. Por eso no se busca a
-        ciegas en todo el portal: se leen las cotizaciones **asociadas a este
-        negocio** y se casa cada token contra las tres cosas. Así un número
-        repetido en otro negocio no puede colarse.
+        Devuelve ``(ids, perdidas, declara_algo)``:
+
+        * ``ids`` — las cotizaciones del negocio que corresponden.
+        * ``perdidas`` — números que parecen de cotización y no son de este
+          negocio. Eso sí es un error: traer productos de otro cliente sería
+          peor que no facturar.
+        * ``declara_algo`` — el campo tiene contenido aunque no se haya podido
+          sacar ningún número. Pasa cuando alguien escribe «Si» o el número de
+          una factura de Odoo. No se inventa nada: se cae al negocio.
+
+        Los números se casan contra las cotizaciones **asociadas a este
+        negocio**, nunca contra todo el portal, así que un número repetido en
+        otro negocio no puede colarse.
         """
         propiedad = (
             self.env["ir.config_parameter"]
@@ -1033,39 +1050,39 @@ class HubspotWebhookEvent(models.Model):
         )
         crudo = (deal_props.get(propiedad) or "").strip()
         if not crudo:
-            return [], []
+            return [], [], False
 
-        tokens = [t.strip() for t in crudo.replace(";", ",").split(",") if t.strip()]
-        if not tokens:
-            return [], []
+        numeros = []
+        for n in re.findall(self.QUOTE_NUMBER_RE, crudo):
+            if n not in numeros:
+                numeros.append(n)
+        if not numeros:
+            return [], [], True
 
         client = self.env["hubspot.client"]
         asociadas = client.get_associated_ids("deals", deal_id, "quotes")
         if not asociadas:
-            return [], tokens
+            return [], numeros, True
 
-        ids = [qid for qid, _primary in asociadas]
-        cotizaciones = client.batch_read("quotes", ids, QUOTE_PROPERTIES)
-
+        cotizaciones = client.batch_read(
+            "quotes", [qid for qid, _primary in asociadas], QUOTE_PROPERTIES
+        )
         indice = {}
         for q in cotizaciones:
             props = q.get("properties") or {}
-            for clave in (
-                q.get("id"),
-                props.get("hs_quote_number"),
-                props.get("hs_title"),
-            ):
+            for clave in (q.get("id"), props.get("hs_quote_number")):
                 if clave:
-                    indice[str(clave).strip().lower()] = q.get("id")
+                    indice[str(clave).strip()] = q.get("id")
 
         encontradas, perdidas = [], []
-        for token in tokens:
-            qid = indice.get(token.lower())
-            if qid and qid not in encontradas:
-                encontradas.append(qid)
-            elif not qid:
-                perdidas.append(token)
-        return encontradas, perdidas
+        for numero in numeros:
+            qid = indice.get(numero)
+            if qid:
+                if qid not in encontradas:
+                    encontradas.append(qid)
+            else:
+                perdidas.append(numero)
+        return encontradas, perdidas, True
 
     def _line_item_sources(self, deal_id, quote_id, deal_props):
         """De dónde salen los productos, en orden de preferencia.
@@ -1082,7 +1099,7 @@ class HubspotWebhookEvent(models.Model):
         if preferencia == "deal":
             return [("deals", deal_id)], []
 
-        aprobadas, perdidas = self._approved_quotes(deal_id, deal_props)
+        aprobadas, perdidas, declara_algo = self._approved_quotes(deal_id, deal_props)
         if perdidas:
             raise UserError(
                 _(
@@ -1099,6 +1116,9 @@ class HubspotWebhookEvent(models.Model):
         if aprobadas:
             return [("quotes", q) for q in aprobadas], aprobadas
 
+        # El campo dice algo pero sin número reconocible —«Si», el número de
+        # una factura—. Se cae al negocio en lugar de fallar: es aprobación,
+        # solo que sin indicar cuál.
         # Sin campo relleno: la que disparó, y si no el negocio.
         if preferencia == "quote":
             if not quote_id:
