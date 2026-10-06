@@ -162,6 +162,23 @@ class ResConfigSettings(models.TransientModel):
         "o con productos sin homologar).",
     )
 
+    hubspot_sweep_enabled = fields.Boolean(
+        string="Buscar los negocios ganados periódicamente",
+        config_parameter="hubspot_invoice_bridge.sweep_enabled",
+        help="Además de escuchar los webhooks, pregunta cada cuarto de hora "
+        "por los negocios que ya están en una etapa que factura. Es el "
+        "respaldo de la suscripción de HubSpot, que desde Odoo no se "
+        "puede comprobar: si se pausa o se borra, sin esto el silencio "
+        "es idéntico al de un día sin ventas.",
+    )
+    hubspot_sweep_since = fields.Datetime(
+        string="Buscar a partir de",
+        config_parameter="hubspot_invoice_bridge.sweep_since",
+        help="Suelo del barrido: no se mira nada modificado antes de esta "
+        "fecha. Se fija solo la primera vez, con la fecha de entonces, "
+        "para no arrastrar de golpe el histórico entero del portal.",
+    )
+
     hubspot_webhook_url_preview = fields.Char(
         string="Target URL a registrar en HubSpot",
         compute="_compute_hubspot_webhook_url_preview",

@@ -251,6 +251,147 @@ class HubspotWebhookEvent(models.Model):
             self.env.cr.commit()
         return True
 
+    @api.model
+    def _cron_sweep_deals(self, limit=25):
+        """Va a buscar los negocios ganados en vez de esperar a que avisen.
+
+        El webhook es la vía rápida, pero depende de una suscripción que vive
+        dentro de la app privada de HubSpot y que desde Odoo no se puede leer
+        ni comprobar: el token da 403 en la API de webhooks. Si alguien la
+        pausa, la cambia o nunca llegó a crearse, el silencio es exactamente
+        igual al de un día sin ventas, y así se pueden perder semanas sin que
+        nadie lo note.
+
+        Este barrido cierra ese agujero preguntando por los negocios que ya
+        están en una etapa que factura. No sustituye al webhook: lo respalda.
+
+        No duplica nada. El identificador del evento lleva la fecha de
+        modificación del negocio, así que repetir el mismo negocio sin
+        cambios choca contra la restricción única, y el procesado ya se niega
+        a crear un segundo documento para un negocio que ya tiene uno.
+        """
+        param = self.env["ir.config_parameter"].sudo()
+        if param.get_param("hubspot_invoice_bridge.sweep_enabled") != "True":
+            return 0
+
+        etapas = self.env["hubspot.deal.stage"].search(
+            [("trigger_invoice", "=", True)]
+        )
+        if not etapas:
+            _logger.info(
+                "Barrido de HubSpot: ninguna etapa marcada para facturar, "
+                "no hay nada que buscar."
+            )
+            return 0
+
+        # El suelo se fija la primera vez y no se mueve: el barrido sirve para
+        # lo que venga a partir de ahora, no para arrastrar el histórico
+        # entero del portal de golpe.
+        suelo = param.get_param("hubspot_invoice_bridge.sweep_since")
+        if not suelo:
+            suelo = fields.Datetime.to_string(fields.Datetime.now())
+            param.set_param("hubspot_invoice_bridge.sweep_since", suelo)
+        desde = param.get_param("hubspot_invoice_bridge.sweep_cursor") or suelo
+
+        marca = int(
+            fields.Datetime.from_string(desde)
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
+            * 1000
+        )
+
+        respuesta = self.env["hubspot.client"]._request(
+            "POST",
+            "/crm/v3/objects/deals/search",
+            payload={
+                "filterGroups": [
+                    {
+                        "filters": [
+                            {
+                                "propertyName": "dealstage",
+                                "operator": "IN",
+                                "values": etapas.mapped("stage_id"),
+                            },
+                            {
+                                "propertyName": "hs_lastmodifieddate",
+                                "operator": "GTE",
+                                "value": str(marca),
+                            },
+                        ]
+                    }
+                ],
+                "properties": ["dealstage", "hs_lastmodifieddate"],
+                "sorts": [
+                    {
+                        "propertyName": "hs_lastmodifieddate",
+                        "direction": "ASCENDING",
+                    }
+                ],
+                "limit": limit,
+            },
+        )
+        negocios = (respuesta or {}).get("results") or []
+        if not negocios:
+            return 0
+
+        eventos = []
+        ultima = None
+        for negocio in negocios:
+            props = negocio.get("properties") or {}
+            modificado = self._hubspot_datetime(props.get("hs_lastmodifieddate"))
+            if modificado:
+                ultima = modificado
+            eventos.append(
+                {
+                    "eventId": "barrido-%s-%s"
+                    % (negocio.get("id"), props.get("hs_lastmodifieddate") or ""),
+                    "subscriptionType": "deal.propertyChange",
+                    "objectId": negocio.get("id"),
+                    "propertyName": "dealstage",
+                    "propertyValue": props.get("dealstage"),
+                    "changeSource": "BARRIDO",
+                    "occurredAt": int(
+                        modificado.replace(tzinfo=timezone.utc).timestamp() * 1000
+                    )
+                    if modificado
+                    else None,
+                }
+            )
+
+        creados = self.ingest_batch(eventos)
+
+        # El cursor avanza hasta la última fecha vista, no un segundo más: el
+        # filtro vuelve a incluirla en la pasada siguiente y el duplicado se
+        # descarta solo. Prefiero repetir uno a saltarme otro.
+        if ultima:
+            param.set_param(
+                "hubspot_invoice_bridge.sweep_cursor",
+                fields.Datetime.to_string(ultima),
+            )
+
+        _logger.info(
+            "Barrido de HubSpot: %d negocio(s) revisados desde %s, %d evento(s) "
+            "nuevos en cola.",
+            len(negocios),
+            desde,
+            len(creados),
+        )
+        return len(creados)
+
+    @staticmethod
+    def _hubspot_datetime(valor):
+        """'2026-10-06T18:05:31.123Z' → datetime en UTC y sin zona."""
+        if not valor:
+            return None
+        try:
+            return (
+                datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None, microsecond=0)
+            )
+        except (TypeError, ValueError):
+            return None
+
     def action_process(self):
         """Reprocesa manualmente desde la vista."""
         for event in self:
@@ -362,7 +503,8 @@ class HubspotWebhookEvent(models.Model):
                 "state": "error",
                 "error_message": _(
                     "El negocio %s no existe en HubSpot o el token no tiene "
-                    "acceso a él.", deal_id
+                    "acceso a él.",
+                    deal_id,
                 ),
             }
         deal_props = deal.get("properties") or {}
@@ -372,8 +514,8 @@ class HubspotWebhookEvent(models.Model):
             return {
                 "state": "skipped",
                 "error_message": _(
-                    "El negocio %s todavía no cumple la condición para "
-                    "facturar.", deal_id
+                    "El negocio %s todavía no cumple la condición para " "facturar.",
+                    deal_id,
                 ),
             }
 
@@ -491,9 +633,7 @@ class HubspotWebhookEvent(models.Model):
             ), quote_id
         if modo == "stage_and_quote":
             if etapa_ok and quote_id:
-                return _(
-                    "etapa ganada y cotización %s firmada", quote_id
-                ), quote_id
+                return _("etapa ganada y cotización %s firmada", quote_id), quote_id
             return False, quote_id
         if modo == "stage_or_flag":
             if etapa_ok:
@@ -617,8 +757,15 @@ class HubspotWebhookEvent(models.Model):
 
         if self._needs_warehouse(lines):
             documento = self._create_sale_order(
-                deal_id, quote_id, mapping, partner, lines, currency,
-                comercial, narration, nombre,
+                deal_id,
+                quote_id,
+                mapping,
+                partner,
+                lines,
+                currency,
+                comercial,
+                narration,
+                nombre,
             )
             cuerpo = _(
                 "Orden de venta generada automáticamente desde el negocio de "
@@ -631,8 +778,15 @@ class HubspotWebhookEvent(models.Model):
             )
         else:
             documento = self._create_invoice(
-                deal_id, quote_id, mapping, partner, lines, currency,
-                comercial, narration, nombre,
+                deal_id,
+                quote_id,
+                mapping,
+                partner,
+                lines,
+                currency,
+                comercial,
+                narration,
+                nombre,
             )
             cuerpo = _(
                 "Factura generada automáticamente desde el negocio de HubSpot "
@@ -666,13 +820,25 @@ class HubspotWebhookEvent(models.Model):
         if modo == "sale_order":
             return True
 
-        productos = self.env["product.product"].sudo().browse(
-            [l["product_id"] for l in lines if l.get("product_id")]
+        productos = (
+            self.env["product.product"]
+            .sudo()
+            .browse([l["product_id"] for l in lines if l.get("product_id")])
         )
         return any(productos.mapped("is_storable"))
 
-    def _create_sale_order(self, deal_id, quote_id, mapping, partner, lines,
-                           currency, comercial, narration, nombre):
+    def _create_sale_order(
+        self,
+        deal_id,
+        quote_id,
+        mapping,
+        partner,
+        lines,
+        currency,
+        comercial,
+        narration,
+        nombre,
+    ):
         """La orden de venta, en presupuesto. Nunca se confirma sola.
 
         Confirmarla reserva existencias y genera la entrega, y eso es una
@@ -683,7 +849,8 @@ class HubspotWebhookEvent(models.Model):
         vals = {
             "partner_id": partner.id,
             "company_id": mapping.company_id.id,
-            "currency_id": currency.id,
+            # La moneda va por la tarifa, no por el campo. Ver _resolve_pricelist.
+            "pricelist_id": self._resolve_pricelist(currency, mapping, partner).id,
             "origin": _("HubSpot %s", nombre),
             "client_order_ref": nombre,
             "hubspot_deal_id": deal_id,
@@ -708,12 +875,20 @@ class HubspotWebhookEvent(models.Model):
             vals["user_id"] = comercial.id
         if narration:
             vals["note"] = narration
-        return (
-            self.env["sale.order"].with_company(mapping.company_id).create(vals)
-        )
+        return self.env["sale.order"].with_company(mapping.company_id).create(vals)
 
-    def _create_invoice(self, deal_id, quote_id, mapping, partner, lines,
-                        currency, comercial, narration, nombre):
+    def _create_invoice(
+        self,
+        deal_id,
+        quote_id,
+        mapping,
+        partner,
+        lines,
+        currency,
+        comercial,
+        narration,
+        nombre,
+    ):
         """La factura, siempre en borrador.
 
         Nunca se valida ni se contabiliza: faltan datos que se revisan a mano
@@ -815,6 +990,49 @@ class HubspotWebhookEvent(models.Model):
                     self.object_id,
                 )
         return mapping.currency_id or mapping.company_id.currency_id
+
+    def _resolve_pricelist(self, currency, mapping, partner):
+        """La tarifa, que es lo que de verdad fija la moneda de un pedido.
+
+        En ``sale.order`` la moneda no se escribe: se calcula a partir de la
+        tarifa. Pasar ``currency_id`` en los valores no da error y tampoco
+        hace nada, y el resultado es silencioso y equivocado: el pedido sale
+        en la moneda de la tarifa con los precios que vinieron de HubSpot. Un
+        negocio de 4.020,32 USD acababa siendo un pedido de 556,36 COP, con
+        los precios unitarios en dólares puestos como si fueran pesos.
+
+        Si no hay tarifa en la moneda del negocio se para. Un documento con
+        el importe mal no se nota al crearlo: se nota al cobrarlo.
+        """
+        propia = partner.property_product_pricelist
+        if propia and propia.currency_id == currency:
+            return propia
+
+        tarifa = (
+            self.env["product.pricelist"]
+            .with_company(mapping.company_id)
+            .search(
+                [
+                    ("currency_id", "=", currency.id),
+                    ("company_id", "in", (False, mapping.company_id.id)),
+                ],
+                limit=1,
+            )
+        )
+        if tarifa:
+            return tarifa
+
+        raise UserError(
+            _(
+                "El negocio está en %(moneda)s y no hay ninguna tarifa en esa "
+                "moneda para %(compania)s. Sin ella el pedido saldría con los "
+                "precios de HubSpot pero en otra moneda, es decir con el "
+                "importe mal y sin que nada lo avise.\n\n"
+                "Cree una tarifa en %(moneda)s y reprocese el evento.",
+                moneda=currency.name,
+                compania=mapping.company_id.name,
+            )
+        )
 
     # ------------------------------------------------------------------
     # Cliente
@@ -1233,9 +1451,7 @@ class HubspotWebhookEvent(models.Model):
         if not email:
             return self.env["res.users"].browse()
         usuario = (
-            self.env["res.users"]
-            .sudo()
-            .search([("login", "=ilike", email)], limit=1)
+            self.env["res.users"].sudo().search([("login", "=ilike", email)], limit=1)
         )
         if not usuario:
             usuario = (
@@ -1247,7 +1463,8 @@ class HubspotWebhookEvent(models.Model):
             _logger.info(
                 "hubspot: el propietario %s (%s) no tiene usuario en Odoo; la "
                 "factura queda sin comercial.",
-                owner_id, email,
+                owner_id,
+                email,
             )
         return usuario
 

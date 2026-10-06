@@ -45,6 +45,19 @@
                         <field name="hubspot_verify_signature" />
                     </setting>
 
+                    <setting string="Buscar los negocios, sin esperar al webhook"
+                        help="Respaldo de la suscripción de HubSpot, que desde Odoo no se puede comprobar: si se pausa o se borra, el silencio es idéntico al de un día sin ventas. Cada cuarto de hora pregunta por los negocios que ya están en una etapa que factura.">
+                        <field name="hubspot_sweep_enabled" />
+                        <div class="content-group mt16"
+                            invisible="not hubspot_sweep_enabled">
+                            <div class="row">
+                                <label for="hubspot_sweep_since"
+                                    class="col-lg-4 o_light_label" />
+                                <field name="hubspot_sweep_since" />
+                            </div>
+                        </div>
+                    </setting>
+
                     <setting string="Cuándo se factura"
                         help="Qué suceso de HubSpot crea la factura en borrador.">
                         <div class="content-group mt16">

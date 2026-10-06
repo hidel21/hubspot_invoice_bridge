@@ -23,4 +23,17 @@
         <field name="active" eval="False" />
     </record>
 
+    <record id="ir_cron_sweep_hubspot_deals" model="ir.cron">
+        <field name="name">HubSpot: buscar negocios ganados (respaldo del webhook)</field>
+        <field name="model_id" ref="model_hubspot_webhook_event" />
+        <field name="state">code</field>
+        <field name="code">model._cron_sweep_deals()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+        <!-- El cron queda activo, pero el barrido no hace nada mientras no se
+             marque la casilla en Ajustes: así se enciende y se apaga desde la
+             interfaz sin tener que tocar acciones planificadas. -->
+        <field name="active" eval="True" />
+    </record>
+
 </odoo>
