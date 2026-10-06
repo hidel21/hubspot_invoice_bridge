@@ -869,6 +869,9 @@ class HubspotWebhookEvent(models.Model):
                 for line in lines
             ],
         }
+        fuente = self._hubspot_source()
+        if fuente:
+            vals["source_id"] = fuente.id
         if mapping.fiscal_position_id:
             vals["fiscal_position_id"] = mapping.fiscal_position_id.id
         if comercial:
@@ -876,6 +879,20 @@ class HubspotWebhookEvent(models.Model):
         if narration:
             vals["note"] = narration
         return self.env["sale.order"].with_company(mapping.company_id).create(vals)
+
+    def _hubspot_source(self):
+        """El origen «By HubSpot» con el que se marca todo lo que entra.
+
+        Se busca por su identificador externo y no por el nombre: si alguien
+        lo renombra o lo traduce, los documentos nuevos siguen cayendo en el
+        mismo registro y los informes no se parten en dos.
+
+        Si el registro se borró, se devuelve vacío en lugar de fallar. Marcar
+        el origen es útil, pero no es motivo para no crear el documento.
+        """
+        return self.env.ref(
+            "hubspot_invoice_bridge.utm_source_hubspot", raise_if_not_found=False
+        )
 
     def _create_invoice(
         self,
@@ -907,6 +924,9 @@ class HubspotWebhookEvent(models.Model):
             "hubspot_portal_id": self.portal_id or False,
             "invoice_line_ids": [Command.create(line) for line in lines],
         }
+        fuente = self._hubspot_source()
+        if fuente:
+            move_vals["source_id"] = fuente.id
         if mapping.fiscal_position_id:
             move_vals["fiscal_position_id"] = mapping.fiscal_position_id.id
         if comercial:

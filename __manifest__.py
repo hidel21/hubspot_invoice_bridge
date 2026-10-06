@@ -1,6 +1,6 @@
 {
     "name": "HubSpot → Odoo Invoice Bridge",
-    "version": "18.0.5.0.0",
+    "version": "18.0.5.1.0",
     "summary": "Genera facturas de cliente en borrador desde negocios ganados en HubSpot",
     "description": """
 Integración HubSpot → Odoo
@@ -33,10 +33,11 @@ Características
     "website": "https://intelli-next.com",
     "category": "Accounting/Accounting",
     "license": "LGPL-3",
-    "depends": ["account", "sale"],
+    "depends": ["account", "sale", "utm"],
     "data": [
         "security/hubspot_security.xml",
         "security/ir.model.access.csv",
+        "data/utm_source.xml",
         "data/ir_cron.xml",
         "views/hubspot_webhook_event_views.xml",
         "views/hubspot_deal_stage_views.xml",

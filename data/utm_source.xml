@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- noupdate: si alguien renombra o traduce este origen, la siguiente
+         actualización del módulo no le pisa el cambio. Lo que importa es el
+         registro al que apuntan los documentos, no el texto que lleva. -->
+    <data noupdate="1">
+
+        <record id="utm_source_hubspot" model="utm.source">
+            <field name="name">By HubSpot</field>
+        </record>
+
+    </data>
+</odoo>
