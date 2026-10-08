@@ -46,7 +46,7 @@
                     </setting>
 
                     <setting string="Marca de los clientes nuevos"
-                        help="Un cliente traído del CRM nace sin NIT ni impuestos, porque esos datos no están en HubSpot. Nace con esta marca delante del nombre para que administración lo encuentre, lo complete y se la quite. A un cliente que ya existía en Odoo no se le toca el nombre.">
+                        help="Un cliente traído del CRM nace sin NIT ni impuestos, porque esos datos no están en HubSpot. Nace con esta marca delante del nombre para que administración lo encuentre, lo complete y se la quite. Si se deja vacío se usa «[By HubSpot]». A un cliente que ya existía en Odoo no se le toca el nombre.">
                         <field name="hubspot_new_partner_prefix"
                             placeholder="[By HubSpot]" />
                     </setting>

@@ -169,8 +169,8 @@ class ResConfigSettings(models.TransientModel):
         help="Prefijo con el que nace un cliente traído del CRM, que llega sin "
         "NIT ni impuestos porque esos datos no están en HubSpot. Sirve "
         "para que administración los encuentre, los complete y le quite la "
-        "marca. Déjelo vacío si no quiere que se renombre. A un cliente "
-        "que ya existía en Odoo no se le toca el nombre.",
+        "marca. Si se deja vacío se usa «[By HubSpot]». A un cliente que "
+        "ya existía en Odoo no se le toca el nombre.",
     )
 
     hubspot_sweep_enabled = fields.Boolean(

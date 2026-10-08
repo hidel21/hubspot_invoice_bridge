@@ -1309,8 +1309,13 @@ class HubspotWebhookEvent(models.Model):
         # sufijo lo puso quien dio de alta la ficha. Si al quitarlo coincidiera
         # más de una —una SAS y una LTDA con el mismo nombre son empresas
         # distintas— no se enlaza ninguna.
+        # Se intenta siempre que la vía anterior no haya encontrado nada, y no
+        # solo cuando el nombre de HubSpot lleve forma jurídica: el caso
+        # habitual es justo el contrario —«AGP Representaciones» en el CRM
+        # contra «AGP REPRESENTACIONES SAS» en Odoo—, y condicionarlo al
+        # nombre entrante dejaba esta vía muerta.
         corto = self._nombre_sin_forma_juridica(nombre)
-        if corto and corto != nombre:
+        if corto:
             iguales = candidatos.filtered(
                 lambda p: self._nombre_sin_forma_juridica(
                     self._normalizar_nombre(p.name)
