@@ -162,6 +162,17 @@ class ResConfigSettings(models.TransientModel):
         "o con productos sin homologar).",
     )
 
+    hubspot_new_partner_prefix = fields.Char(
+        string="Marca de los clientes nuevos",
+        default="[By HubSpot]",
+        config_parameter="hubspot_invoice_bridge.new_partner_prefix",
+        help="Prefijo con el que nace un cliente traído del CRM, que llega sin "
+        "NIT ni impuestos porque esos datos no están en HubSpot. Sirve "
+        "para que administración los encuentre, los complete y le quite la "
+        "marca. Déjelo vacío si no quiere que se renombre. A un cliente "
+        "que ya existía en Odoo no se le toca el nombre.",
+    )
+
     hubspot_sweep_enabled = fields.Boolean(
         string="Buscar los negocios ganados periódicamente",
         config_parameter="hubspot_invoice_bridge.sweep_enabled",

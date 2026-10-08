@@ -45,6 +45,12 @@
                         <field name="hubspot_verify_signature" />
                     </setting>
 
+                    <setting string="Marca de los clientes nuevos"
+                        help="Un cliente traído del CRM nace sin NIT ni impuestos, porque esos datos no están en HubSpot. Nace con esta marca delante del nombre para que administración lo encuentre, lo complete y se la quite. A un cliente que ya existía en Odoo no se le toca el nombre.">
+                        <field name="hubspot_new_partner_prefix"
+                            placeholder="[By HubSpot]" />
+                    </setting>
+
                     <setting string="Buscar los negocios, sin esperar al webhook"
                         help="Respaldo de la suscripción de HubSpot, que desde Odoo no se puede comprobar: si se pausa o se borra, el silencio es idéntico al de un día sin ventas. Cada cuarto de hora pregunta por los negocios que ya están en una etapa que factura.">
                         <field name="hubspot_sweep_enabled" />

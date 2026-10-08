@@ -8,6 +8,11 @@ from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
+# Marca con la que nace un cliente traído del CRM. Lleva el nombre del
+# origen a propósito: administración filtra por él para completar el NIT
+# y los impuestos, y lo borra cuando la ficha ya está lista.
+PREFIJO_CLIENTE_NUEVO = "[By HubSpot]"
+
 # Propiedades que se piden a HubSpot para cada tipo de objeto.
 # Los nombres internos provienen del inventario de propiedades del portal
 # (resources/Propiedades de HubSpot .xlsx). Las que no son estándar de HubSpot
@@ -1161,23 +1166,68 @@ class HubspotWebhookEvent(models.Model):
 
     @staticmethod
     def _normalizar_nit(texto):
-        """Solo los dígitos. El NIT se escribe de mil maneras.
+        """El NIT sin puntos y sin dígito de verificación.
 
-        900.628.818, 900628818-1 y 900628818 son el mismo número escrito por
-        tres personas distintas.
+        900.628.818-1, 900628818-1 y 900628818 son el mismo número escrito por
+        tres personas distintas. El dígito de verificación va detrás de un
+        guion, así que cuando aparece así se descarta: en Odoo el NIT suele
+        guardarse sin él, y compararlos con el guion puesto no encontraba nada.
         """
-        return re.sub(r"\D", "", str(texto or ""))
+        crudo = str(texto or "").strip()
+        digitos = re.sub(r"\D", "", crudo)
+        if re.search(r"-\s*\d\s*$", crudo) and len(digitos) > 1:
+            return digitos[:-1]
+        return digitos
 
     @staticmethod
     def _normalizar_nombre(texto):
         """Nombre de empresa comparable: sin puntuación, en mayúsculas.
 
         «ALISTAR S.A.S.» en HubSpot y «ALISTAR SAS» en Odoo son la misma
-        empresa. Sin normalizar, la búsqueda por nombre no encontraría casi
-        nada y se seguirían creando duplicados.
+        empresa. La diferencia está en los puntos de la forma jurídica, así
+        que el punto se **borra** en vez de convertirse en espacio: si se
+        sustituyera, «S.A.S.» quedaría como «S A S» y seguiría sin casar. El
+        resto de signos sí pasan a espacio, porque ahí suelen separar palabras.
         """
-        limpio = re.sub(r"[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+", " ", str(texto or ""))
+        crudo = str(texto or "")
+        sin_puntos = re.sub(r"[.·'’]", "", crudo)
+        limpio = re.sub(r"[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+", " ", sin_puntos)
         return re.sub(r"\s+", " ", limpio).strip().upper()
+
+    # Formas jurídicas que se escriben o se omiten según quién teclee. Van ya
+    # normalizadas —sin puntos y en mayúsculas—, que es como llegan aquí.
+    FORMAS_JURIDICAS = (
+        "SAS", "SA", "SAC", "SAU", "LTDA", "LTD", "SCA", "SCS", "EU", "ESP",
+        "INC", "CORP", "LLC", "SRL", "CA", "SL",
+    )
+
+    @classmethod
+    def _nombre_sin_forma_juridica(cls, nombre):
+        """El nombre sin el sufijo de sociedad, si lo lleva."""
+        partes = (nombre or "").split(" ")
+        while len(partes) > 1 and partes[-1] in cls.FORMAS_JURIDICAS:
+            partes.pop()
+        return " ".join(partes)
+
+    # Formas jurídicas que se escriben o se omiten según quien teclee. No se
+    # quitan del nombre que se guarda: solo se ignoran al comparar.
+    FORMAS_JURIDICAS = (
+        "SAS", "SA", "LTDA", "LTD", "SCA", "EU", "SAU", "SRL",
+        "INC", "CORP", "LLC", "CA", "SL", "BIC", "ESP",
+    )
+
+    @classmethod
+    def _nombre_sin_forma_juridica(cls, normalizado):
+        """El nombre sin el sufijo de la forma jurídica, si lo lleva.
+
+        Recibe un nombre ya normalizado. Solo quita el último trozo, y solo si
+        es una forma jurídica: «AGP REPRESENTACIONES SAS» pierde el SAS,
+        «SAS INSTITUTE» no pierde nada porque ahí va delante.
+        """
+        partes = (normalizado or "").split(" ")
+        while len(partes) > 1 and partes[-1] in cls.FORMAS_JURIDICAS:
+            partes.pop()
+        return " ".join(partes)
 
     def _buscar_cliente_existente(self, props):
         """El cliente que ya está en Odoo, si lo hay.
@@ -1252,6 +1302,30 @@ class HubspotWebhookEvent(models.Model):
                 nombre,
                 len(iguales),
             )
+            return Partner.browse()
+
+        # 3. Sin la forma jurídica. En el CRM se teclea «AGP Representaciones»
+        # y en Odoo está «AGP REPRESENTACIONES SAS»: es la misma empresa, y el
+        # sufijo lo puso quien dio de alta la ficha. Si al quitarlo coincidiera
+        # más de una —una SAS y una LTDA con el mismo nombre son empresas
+        # distintas— no se enlaza ninguna.
+        corto = self._nombre_sin_forma_juridica(nombre)
+        if corto and corto != nombre:
+            iguales = candidatos.filtered(
+                lambda p: self._nombre_sin_forma_juridica(
+                    self._normalizar_nombre(p.name)
+                )
+                == corto
+            )
+            if len(iguales) == 1:
+                return iguales
+            if len(iguales) > 1:
+                _logger.warning(
+                    "'%s' coincide con %s clientes al ignorar la forma "
+                    "jurídica; no se enlaza ninguno.",
+                    corto,
+                    len(iguales),
+                )
         return Partner.browse()
 
     def _completar_huecos(self, partner, props):
@@ -1300,8 +1374,26 @@ class HubspotWebhookEvent(models.Model):
             "hubspot_invoice_bridge.billing_email_property", "correo_de_facturacion"
         )
 
+        # Un cliente recién traído del CRM nace incompleto: sin NIT y sin
+        # impuestos, porque esos datos no viven en HubSpot. El prefijo es para
+        # que administración los encuentre de un vistazo, los complete y le
+        # quite la marca; sin él se pierden entre varios miles de contactos.
+        # Se acordó con Xilean el 08-10-2026.
+        #
+        # Solo lo llevan los que crea el módulo: a un cliente que ya existía no
+        # se le toca el nombre, que para eso se busca antes de crear.
+        prefijo = (
+            param.get_param(
+                "hubspot_invoice_bridge.new_partner_prefix", PREFIJO_CLIENTE_NUEVO
+            )
+            or ""
+        ).strip()
+        nombre = props.get("name") or _("Empresa HubSpot %s", company_id)
+        if prefijo and not nombre.startswith(prefijo):
+            nombre = "%s %s" % (prefijo, nombre)
+
         vals = {
-            "name": props.get("name") or _("Empresa HubSpot %s", company_id),
+            "name": nombre,
             "is_company": True,
             "company_type": "company",
             "hubspot_company_id": company_id,
