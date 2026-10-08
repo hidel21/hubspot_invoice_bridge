@@ -1100,7 +1100,28 @@ class HubspotWebhookEvent(models.Model):
                 )
             )
 
-        vals = self._prepare_partner_vals(company_id, company.get("properties") or {})
+        props = company.get("properties") or {}
+
+        # Antes de crear, buscar al que ya existe. El cliente de un negocio
+        # ganado casi nunca es nuevo: lleva años facturándose, con su NIT, su
+        # dirección y su configuración fiscal. Crear otro deja una factura sin
+        # identificación tributaria —que no se puede emitir— y parte el
+        # histórico del cliente en dos fichas.
+        partner = self._buscar_cliente_existente(props)
+        if partner:
+            partner.sudo().write({"hubspot_company_id": company_id})
+            self._completar_huecos(partner, props)
+            _logger.info(
+                "La empresa %s de HubSpot se enlazó con el cliente que ya "
+                "existía: %s (id %s).",
+                company_id,
+                partner.display_name,
+                partner.id,
+            )
+            self._sync_primary_contact(deal_id, partner)
+            return partner
+
+        vals = self._prepare_partner_vals(company_id, props)
         try:
             with self.env.cr.savepoint():
                 partner = self.env["res.partner"].create(vals)
@@ -1137,6 +1158,140 @@ class HubspotWebhookEvent(models.Model):
 
         self._sync_primary_contact(deal_id, partner)
         return partner
+
+    @staticmethod
+    def _normalizar_nit(texto):
+        """Solo los dígitos. El NIT se escribe de mil maneras.
+
+        900.628.818, 900628818-1 y 900628818 son el mismo número escrito por
+        tres personas distintas.
+        """
+        return re.sub(r"\D", "", str(texto or ""))
+
+    @staticmethod
+    def _normalizar_nombre(texto):
+        """Nombre de empresa comparable: sin puntuación, en mayúsculas.
+
+        «ALISTAR S.A.S.» en HubSpot y «ALISTAR SAS» en Odoo son la misma
+        empresa. Sin normalizar, la búsqueda por nombre no encontraría casi
+        nada y se seguirían creando duplicados.
+        """
+        limpio = re.sub(r"[^0-9A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]+", " ", str(texto or ""))
+        return re.sub(r"\s+", " ", limpio).strip().upper()
+
+    def _buscar_cliente_existente(self, props):
+        """El cliente que ya está en Odoo, si lo hay.
+
+        El cliente de un negocio ganado casi nunca es nuevo: lleva tiempo
+        facturándose, con su NIT y su configuración fiscal. Buscarlo antes de
+        crear evita dos daños a la vez: una ficha duplicada y una factura sin
+        identificación tributaria, que no se puede emitir.
+
+        Dos vías, de más fiable a menos. Ante la duda no se enlaza nada: un
+        cliente de más se corrige en un minuto, una factura emitida a quien no
+        era, no.
+        """
+        Partner = self.env["res.partner"]
+        vat_property = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("hubspot_invoice_bridge.vat_property", "nit")
+        )
+
+        # 1. Por NIT, que es un identificador y no admite interpretación.
+        crudo = str(props.get(vat_property) or "").strip()
+        nit = self._normalizar_nit(crudo)
+        if nit:
+            candidatos = Partner.search(
+                [
+                    ("parent_id", "=", False),
+                    "|",
+                    ("vat", "in", [nit, crudo]),
+                    ("vat", "ilike", nit),
+                ],
+                limit=20,
+            )
+            iguales = candidatos.filtered(
+                lambda p: self._normalizar_nit(p.vat) == nit
+            )
+            if len(iguales) == 1:
+                return iguales
+            if len(iguales) > 1:
+                _logger.warning(
+                    "El NIT %s coincide con %s clientes de Odoo; no se enlaza "
+                    "ninguno para no elegir mal.",
+                    nit,
+                    len(iguales),
+                )
+                return Partner.browse()
+
+        # 2. Por nombre normalizado, y solo si la coincidencia es única.
+        nombre = self._normalizar_nombre(props.get("name"))
+        if not nombre:
+            return Partner.browse()
+
+        # Se filtra primero por la primera palabra para no recorrer la agenda
+        # entera, y la comparación fina se hace ya sobre pocos registros.
+        candidatos = Partner.search(
+            [
+                ("is_company", "=", True),
+                ("parent_id", "=", False),
+                ("name", "ilike", nombre.split(" ")[0]),
+            ],
+            limit=80,
+        )
+        iguales = candidatos.filtered(
+            lambda p: self._normalizar_nombre(p.name) == nombre
+        )
+        if len(iguales) == 1:
+            return iguales
+        if len(iguales) > 1:
+            _logger.warning(
+                "El nombre '%s' coincide con %s clientes de Odoo; no se enlaza "
+                "ninguno.",
+                nombre,
+                len(iguales),
+            )
+        return Partner.browse()
+
+    def _completar_huecos(self, partner, props):
+        """Rellena lo que al cliente le falte, sin pisar nada.
+
+        Lo que ya está en Odoo lo puso contabilidad y vale más que lo que
+        venga del CRM. Así que solo se escriben los campos vacíos.
+        """
+        vals = self._prepare_partner_vals(partner.hubspot_company_id, props)
+        for campo in ("name", "is_company", "company_type", "hubspot_company_id"):
+            vals.pop(campo, None)
+
+        huecos = {c: v for c, v in vals.items() if v and not partner[c]}
+        if not huecos:
+            return
+
+        try:
+            with self.env.cr.savepoint():
+                partner.sudo().write(huecos)
+        except ValidationError:
+            # Mismo criterio que al crear: un NIT con formato inesperado no
+            # puede impedir que el resto de datos entre.
+            rechazado = huecos.pop("vat", None)
+            if not rechazado:
+                raise
+            if huecos:
+                partner.sudo().write(huecos)
+            _logger.warning(
+                "El NIT '%s' de HubSpot no pasó la validación de Odoo para "
+                "%s; se completó el resto.",
+                rechazado,
+                partner.display_name,
+            )
+            return
+
+        _logger.info(
+            "Completados %s del cliente %s desde HubSpot.",
+            ", ".join(sorted(huecos)),
+            partner.display_name,
+        )
 
     def _prepare_partner_vals(self, company_id, props):
         param = self.env["ir.config_parameter"].sudo()
