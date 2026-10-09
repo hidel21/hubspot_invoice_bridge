@@ -784,7 +784,7 @@ class HubspotWebhookEvent(models.Model):
         self.ensure_one()
 
         mapping = self._resolve_location(deal_props)
-        partner = self._resolve_partner(deal_id)
+        partner = self._resolve_partner(deal_id, deal_props)
         lines = self._build_invoice_lines(
             deal_id, mapping.company_id, quote_id, deal_props
         )
@@ -1096,19 +1096,31 @@ class HubspotWebhookEvent(models.Model):
     # Cliente
     # ------------------------------------------------------------------
 
-    def _resolve_partner(self, deal_id):
-        """El cliente de la factura es la EMPRESA asociada al negocio."""
+    def _resolve_partner(self, deal_id, deal_props=None):
+        """A quién se le factura este negocio.
+
+        Lo normal es la EMPRESA asociada. Pero hay negocios que no tienen
+        ninguna —se vende a una persona, o nadie la asoció— y antes eso los
+        dejaba parados para siempre. Un negocio ganado que no llega a Odoo es
+        peor que uno con la ficha a medias, porque nadie se entera.
+
+        Así que se baja por tres escalones, y solo se para si falla el último:
+
+        1. La empresa asociada.
+        2. El contacto principal, como cliente de pleno derecho. A una persona
+           se le factura igual que a una empresa.
+        3. El propio nombre del negocio, marcado para que administración lo
+           complete.
+        """
         client = self.env["hubspot.client"]
         associations = client.get_associated_ids("deals", deal_id, "companies")
         if not associations:
-            raise UserError(
-                _(
-                    "El negocio %s no tiene ninguna empresa asociada en HubSpot, "
-                    "así que no se puede determinar el cliente a facturar. "
-                    "Asocie la empresa en HubSpot y reprocese este evento.",
-                    deal_id,
-                )
+            _logger.info(
+                "El negocio %s no tiene empresa asociada; se busca a quién "
+                "facturar entre sus contactos.",
+                deal_id,
             )
+            return self._cliente_sin_empresa(deal_id, deal_props or {})
 
         # Si hay varias, se prefiere la marcada como primaria.
         primary = [cid for cid, is_primary in associations if is_primary]
@@ -1196,6 +1208,83 @@ class HubspotWebhookEvent(models.Model):
 
         self._sync_primary_contact(deal_id, partner)
         return partner
+
+    def _cliente_sin_empresa(self, deal_id, deal_props):
+        """A quién facturar cuando el negocio no tiene empresa asociada.
+
+        Primero el contacto principal, que es quien compra de verdad en esos
+        negocios. Si tampoco lo hay, se abre una ficha con el nombre del
+        negocio: queda marcada y sin NIT, pero el negocio entra en Odoo y
+        alguien puede terminarla. Perderlo sería peor.
+        """
+        client = self.env["hubspot.client"]
+        Partner = self.env["res.partner"]
+
+        asociados = client.get_associated_ids("deals", deal_id, "contacts")
+        if asociados:
+            primarios = [cid for cid, es_primario in asociados if es_primario]
+            contacto_id = primarios[0] if primarios else asociados[0][0]
+
+            ya = Partner.search(
+                [("hubspot_contact_id", "=", contacto_id)], limit=1)
+            if ya:
+                # Puede estar de hijo de una empresa de otro negocio; se
+                # factura a la empresa, que es lo correcto.
+                return ya.parent_id or ya
+
+            contacto = client.get_object(
+                "contacts", contacto_id, properties=CONTACT_PROPERTIES)
+            props = (contacto or {}).get("properties") or {}
+            correo = (props.get("email") or "").strip()
+
+            if correo:
+                por_correo = Partner.search(
+                    [("email", "=ilike", correo), ("parent_id", "=", False)],
+                    limit=2)
+                if len(por_correo) == 1:
+                    por_correo.sudo().write({"hubspot_contact_id": contacto_id})
+                    return por_correo
+
+            nombre = " ".join(filter(None, [
+                props.get("firstname"), props.get("lastname")])).strip()
+            nombre = nombre or correo or _("Contacto HubSpot %s", contacto_id)
+            return Partner.create({
+                "name": self._con_marca(nombre),
+                "is_company": False,
+                "type": "contact",
+                "email": correo or False,
+                "phone": props.get("phone") or props.get("mobilephone") or False,
+                "function": props.get("jobtitle") or False,
+                "hubspot_contact_id": contacto_id,
+            })
+
+        # Ni empresa ni contacto. Se abre la ficha con el nombre del negocio.
+        nombre = (deal_props.get("dealname") or "").strip()
+        nombre = nombre or _("Negocio HubSpot %s", deal_id)
+        _logger.warning(
+            "El negocio %s no tiene empresa ni contacto asociados; se crea un "
+            "cliente con su propio nombre para no perderlo.",
+            deal_id,
+        )
+        return self.env["res.partner"].create({
+            "name": self._con_marca(nombre),
+            "is_company": True,
+            "company_type": "company",
+        })
+
+    def _con_marca(self, nombre):
+        """El nombre con la marca de «pendiente de completar», si está puesta."""
+        prefijo = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param(
+                "hubspot_invoice_bridge.new_partner_prefix", PREFIJO_CLIENTE_NUEVO
+            )
+            or ""
+        ).strip()
+        if prefijo and not nombre.startswith(prefijo):
+            return "%s %s" % (prefijo, nombre)
+        return nombre
 
     @staticmethod
     def _normalizar_nit(texto):
@@ -1420,15 +1509,8 @@ class HubspotWebhookEvent(models.Model):
         #
         # Solo lo llevan los que crea el módulo: a un cliente que ya existía no
         # se le toca el nombre, que para eso se busca antes de crear.
-        prefijo = (
-            param.get_param(
-                "hubspot_invoice_bridge.new_partner_prefix", PREFIJO_CLIENTE_NUEVO
-            )
-            or ""
-        ).strip()
-        nombre = props.get("name") or _("Empresa HubSpot %s", company_id)
-        if prefijo and not nombre.startswith(prefijo):
-            nombre = "%s %s" % (prefijo, nombre)
+        nombre = self._con_marca(
+            props.get("name") or _("Empresa HubSpot %s", company_id))
 
         vals = {
             "name": nombre,

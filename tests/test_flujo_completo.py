@@ -229,11 +229,18 @@ class TestFlujoCompleto(TransactionCase):
                 [("hubspot_deal_id", "=", NEGOCIO)]), 1)
 
     # ── lo que debe parar, y decir por qué ───────────────────────────
-    def test_sin_empresa_asociada_se_para_con_motivo(self):
+    def test_sin_empresa_asociada_entra_igual(self):
+        """Cambió el criterio el 09-10-2026: antes se paraba.
+
+        Hay negocios que no tienen empresa asociada, y dejarlos fuera
+        significaba perderlos sin que nadie se enterara. Ahora entran, con la
+        ficha a medias y marcada para completar. Los escalones concretos se
+        prueban en TestNegocioSinEmpresa.
+        """
         evento = self._procesar(PortalFalso(empresas_asociadas=[]))
-        self.assertEqual(evento.state, "error")
-        self.assertIn("empresa", evento.error_message)
-        self.assertFalse(evento.sale_order_id)
+        self.assertEqual(evento.state, "done", evento.error_message or "")
+        self.assertTrue(evento.sale_order_id)
+        self.assertTrue(evento.sale_order_id.partner_id)
 
     def test_un_producto_sin_homologar_para_el_documento_entero(self):
         """Un presupuesto a medias es peor que ninguno: nadie se entera."""
@@ -268,3 +275,84 @@ class TestFlujoCompleto(TransactionCase):
         evento.invalidate_recordset()
         self.assertEqual(evento.state, "skipped")
         self.assertFalse(evento.sale_order_id)
+
+
+@tagged("post_install", "-at_install")
+class TestNegocioSinEmpresa(TestFlujoCompleto):
+    """Un negocio sin empresa asociada tiene que entrar igual.
+
+    Antes se quedaba parado para siempre y se perdía. Un negocio ganado que no
+    llega a Odoo es peor que uno con la ficha a medias, porque nadie se entera
+    de que falta.
+    """
+
+    def _portal_sin_empresa(self, contactos=None):
+        portal = PortalFalso(empresas_asociadas=[])
+        portal.contactos = contactos if contactos is not None else [
+            ("77000111", True)]
+        portal.contacto = {
+            "firstname": "Jhon Jairo",
+            "lastname": "Bustos Espinosa",
+            "email": "jhon@zetaprueba.test",
+            "phone": "3001112233",
+            "jobtitle": "Gerente",
+        }
+
+        get_ids = portal.get_associated_ids
+        get_obj = portal.get_object
+
+        def asociaciones(desde, ident, hacia):
+            if hacia == "contacts":
+                return portal.contactos
+            return get_ids(desde, ident, hacia)
+
+        def objetos(tipo, ident, properties=None, with_history=None):
+            if tipo == "contacts":
+                return {"id": ident, "properties": portal.contacto}
+            return get_obj(tipo, ident, properties, with_history)
+
+        portal.get_associated_ids = asociaciones
+        portal.get_object = objetos
+        return portal
+
+    def test_se_factura_al_contacto_del_negocio(self):
+        evento = self._procesar(self._portal_sin_empresa())
+        self.assertEqual(evento.state, "done", evento.error_message or "")
+        cliente = evento.sale_order_id.partner_id
+        self.assertIn("Jhon Jairo Bustos Espinosa", cliente.name)
+        self.assertEqual(cliente.hubspot_contact_id, "77000111")
+        self.assertEqual(cliente.email, "jhon@zetaprueba.test")
+        self.assertFalse(cliente.is_company)
+
+    def test_el_contacto_nace_marcado(self):
+        """Le falta el NIT igual que a una empresa nueva."""
+        evento = self._procesar(self._portal_sin_empresa())
+        self.assertTrue(
+            evento.sale_order_id.partner_id.name.startswith("[By HubSpot]"))
+
+    def test_sin_empresa_ni_contacto_se_usa_el_nombre_del_negocio(self):
+        evento = self._procesar(self._portal_sin_empresa(contactos=[]))
+        self.assertEqual(evento.state, "done", evento.error_message or "")
+        self.assertIn(
+            "Negocio de aceptación", evento.sale_order_id.partner_id.name)
+
+    def test_un_contacto_que_ya_existe_no_se_duplica(self):
+        existente = self.env["res.partner"].create({
+            "name": "ZETAPRUEBA Jhon ya existente",
+            "email": "jhon@zetaprueba.test",
+        })
+        evento = self._procesar(self._portal_sin_empresa())
+        self.assertEqual(evento.sale_order_id.partner_id, existente)
+        existente.invalidate_recordset()
+        self.assertEqual(existente.hubspot_contact_id, "77000111")
+
+    def test_si_el_contacto_pertenece_a_una_empresa_se_factura_a_la_empresa(self):
+        empresa = self.env["res.partner"].create({
+            "name": "ZETAPRUEBA Empresa del contacto", "is_company": True})
+        self.env["res.partner"].create({
+            "name": "ZETAPRUEBA Jhon de empresa",
+            "parent_id": empresa.id,
+            "hubspot_contact_id": "77000111",
+        })
+        evento = self._procesar(self._portal_sin_empresa())
+        self.assertEqual(evento.sale_order_id.partner_id, empresa)
