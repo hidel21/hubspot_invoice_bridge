@@ -233,7 +233,40 @@ class HubspotWebhookEvent(models.Model):
                     "Evento de HubSpot %s ya registrado, se ignora el duplicado.",
                     event_id,
                 )
+
+        if created:
+            self._pedir_procesado()
         return created
+
+    @api.model
+    def _pedir_procesado(self):
+        """Despierta al procesador en cuanto hay algo que procesar.
+
+        Antes todo dependía del reloj: el evento entraba y esperaba sentado a
+        que el cron pasara, hasta dos minutos. Con el disparo, el trabajo
+        empieza en cuanto llega, y el intervalo del cron queda solo como red
+        por si un disparo se pierde o hay eventos en error esperando otro
+        intento.
+
+        Se hace aquí y no en el controlador para que valga por las dos vías:
+        el webhook y el barrido entran los dos por ingest_batch.
+        """
+        cron = self.env.ref(
+            "hubspot_invoice_bridge.ir_cron_process_hubspot_events",
+            raise_if_not_found=False,
+        )
+        if not cron:
+            return
+        try:
+            cron.sudo()._trigger()
+        except Exception:  # noqa: BLE001
+            # Un disparo fallido no puede tumbar la respuesta al webhook: el
+            # evento ya está guardado y el cron lo recogerá por su intervalo.
+            _logger.warning(
+                "No se pudo disparar el procesado inmediato; quedará para el "
+                "siguiente paso del cron.",
+                exc_info=True,
+            )
 
     # ------------------------------------------------------------------
     # Procesamiento diferido

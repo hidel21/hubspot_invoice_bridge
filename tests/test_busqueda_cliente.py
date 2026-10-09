@@ -237,3 +237,50 @@ class TestCompletarHuecos(TransactionCase):
         """La marca es solo para los que nacen aquí."""
         self.Evento._completar_huecos(self.partner, {"name": "Andromeda"})
         self.assertNotIn("[By HubSpot]", self.partner.name)
+
+
+@tagged("post_install", "-at_install")
+class TestDisparoPorEvento(TransactionCase):
+    """Que el trabajo empiece cuando llega el evento, no cuando toca el reloj."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Evento = cls.env["hubspot.webhook.event"]
+        cls.Disparo = cls.env["ir.cron.trigger"]
+        cls.cron = cls.env.ref(
+            "hubspot_invoice_bridge.ir_cron_process_hubspot_events")
+
+    def _disparos(self):
+        return self.Disparo.search_count([("cron_id", "=", self.cron.id)])
+
+    def _evento(self, identificador):
+        return {
+            "eventId": identificador,
+            "subscriptionType": "deal.propertyChange",
+            "objectId": "1",
+            "propertyName": "dealstage",
+            "propertyValue": "closedwon",
+        }
+
+    def test_un_evento_nuevo_despierta_al_procesador(self):
+        antes = self._disparos()
+        self.Evento.ingest_batch([self._evento("prueba-disparo-1")])
+        self.assertGreater(self._disparos(), antes)
+
+    def test_un_duplicado_no_despierta_a_nadie(self):
+        """Reencolar lo mismo no es un evento nuevo.
+
+        El barrido reencola un negocio cada vez que se toca en HubSpot, así
+        que sin esto el procesador se despertaría una y otra vez para no
+        hacer nada.
+        """
+        self.Evento.ingest_batch([self._evento("prueba-disparo-2")])
+        antes = self._disparos()
+        self.Evento.ingest_batch([self._evento("prueba-disparo-2")])
+        self.assertEqual(self._disparos(), antes)
+
+    def test_un_lote_vacio_no_despierta_a_nadie(self):
+        antes = self._disparos()
+        self.Evento.ingest_batch([])
+        self.assertEqual(self._disparos(), antes)
