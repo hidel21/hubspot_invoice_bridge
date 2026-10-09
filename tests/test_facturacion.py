@@ -243,3 +243,63 @@ class TestOrigenDelCambio(TransactionCase):
 
     def test_sin_origen_si_factura(self):
         self.assertFalse(self._evento(False)._change_source_ignored())
+
+
+@tagged("post_install", "-at_install")
+class TestProductosArchivadosYEspaciado(TransactionCase):
+    """Un catálogo viejo no debe facturarse, y un espacio de más no debe estorbar.
+
+    El caso lo trajo Xilean el 09-10-2026: en HubSpot el producto
+    «Plan de Soporte Técnico -  Personalizado» —con dos espacios tras el
+    guion— lleva el SKU 'imp06', que en Odoo pertenece a otro producto de un
+    catálogo retirado. Se facturó el que no era.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Evento = cls.env["hubspot.webhook.event"]
+        cls.compania = cls.env.company
+        cls.retirado = cls.env["product.product"].create({
+            "name": "ZETAPRUEBA Soporte Dedicado",
+            "default_code": "ZP-IMP06",
+        })
+        cls.vigente = cls.env["product.product"].create({
+            "name": "ZETAPRUEBA Soporte - Personalizado",
+        })
+
+    def test_un_producto_archivado_no_se_factura(self):
+        self.retirado.product_tmpl_id.active = False
+        hallado = self.Evento._resolve_product(
+            {"hs_sku": "ZP-IMP06"}, self.compania)
+        self.assertFalse(hallado)
+
+    def test_un_enlace_memorizado_a_un_archivado_no_resucita(self):
+        """Si el vínculo apunta a algo retirado, deja de valer."""
+        self.retirado.hubspot_product_id = "HS-RETIRADO"
+        self.retirado.product_tmpl_id.active = False
+        hallado = self.Evento._resolve_product(
+            {"hs_product_id": "HS-RETIRADO"}, self.compania)
+        self.assertFalse(hallado)
+
+    def test_un_espacio_de_mas_no_impide_encontrarlo(self):
+        hallado = self.Evento._resolve_product(
+            {"name": "ZETAPRUEBA Soporte -  Personalizado"}, self.compania)
+        self.assertEqual(hallado, self.vigente)
+
+    def test_al_archivar_el_equivocado_cae_en_el_correcto(self):
+        """Es el arreglo que se propone: retirar el catálogo viejo."""
+        self.retirado.hubspot_product_id = "HS-3844689772"
+        self.retirado.product_tmpl_id.active = False
+        hallado = self.Evento._resolve_product(
+            {"name": "ZETAPRUEBA Soporte -  Personalizado",
+             "hs_sku": "ZP-IMP06",
+             "hs_product_id": "HS-3844689772"},
+            self.compania)
+        self.assertEqual(hallado, self.vigente)
+
+    def test_la_puntuacion_sigue_distinguiendo_productos(self):
+        """En un catálogo el guion separa modelos: no se borra al comparar."""
+        self.assertNotEqual(
+            self.Evento._normalizar_producto("Lector A-1"),
+            self.Evento._normalizar_producto("Lector A1"))

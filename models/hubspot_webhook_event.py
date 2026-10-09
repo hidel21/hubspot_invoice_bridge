@@ -1917,7 +1917,41 @@ class HubspotWebhookEvent(models.Model):
                 self._remember_product_link(product, hs_product_id)
                 return product
 
+            # El mismo nombre escrito con otro espaciado. Pasa de verdad: en
+            # HubSpot está «Plan de Soporte Técnico -  Personalizado», con dos
+            # espacios tras el guion, y en Odoo con uno. La comparación exacta
+            # no los une y el producto se queda sin homologar.
+            buscado = self._normalizar_producto(name)
+            primera = buscado.split(" ")[0] if buscado else ""
+            if primera:
+                candidatos = Product.search(
+                    [("name", "ilike", primera)] + domain_company, limit=50
+                )
+                iguales = candidatos.filtered(
+                    lambda p: self._normalizar_producto(p.name) == buscado
+                )
+                if len(iguales) == 1:
+                    self._remember_product_link(iguales, hs_product_id)
+                    return iguales
+                if len(iguales) > 1:
+                    _logger.warning(
+                        "El nombre de producto '%s' coincide con %s productos "
+                        "de Odoo; no se elige ninguno.",
+                        name,
+                        len(iguales),
+                    )
+
         return Product.browse()
+
+    @staticmethod
+    def _normalizar_producto(texto):
+        """Nombre de producto comparable: un solo espacio, sin mayúsculas.
+
+        A diferencia del de empresas, aquí NO se quita la puntuación: en un
+        catálogo los guiones y los puntos suelen distinguir modelos, y
+        borrarlos uniría productos que no son el mismo.
+        """
+        return re.sub(r"\s+", " ", str(texto or "")).strip().upper()
 
     def _resolve_discount(self, props, quantity, price_unit):
         """Descuento de la línea, en porcentaje (que es lo que espera Odoo).
