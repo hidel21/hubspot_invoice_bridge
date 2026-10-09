@@ -284,3 +284,127 @@ class TestDisparoPorEvento(TransactionCase):
         antes = self._disparos()
         self.Evento.ingest_batch([])
         self.assertEqual(self._disparos(), antes)
+
+
+@tagged("post_install", "-at_install")
+class TestNoFusionarLoQueEsDistinto(TransactionCase):
+    """Empresas que se parecen pero no son la misma.
+
+    El caso lo trajo Xilean el 09-10-2026: en el portal conviven Cementos
+    Argos, Zona franca argos, Argo Star Freight, Tecnológico Argos y Seguros
+    Argos oficial. Son cinco clientes distintos. Facturarle a uno lo de otro
+    sería mucho peor que crear una ficha de más.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Evento = cls.env["hubspot.webhook.event"]
+        cls.Partner = cls.env["res.partner"]
+        cls.familia = {}
+        for nombre in ("ZETAPRUEBA Cementos Argos",
+                       "ZETAPRUEBA Zona Franca Argos",
+                       "ZETAPRUEBA Argo Star Freight",
+                       "ZETAPRUEBA Tecnologico Argos",
+                       "ZETAPRUEBA Seguros Argos Oficial"):
+            cls.familia[nombre] = cls.Partner.create({
+                "name": nombre,
+                "is_company": True,
+                "website": "argos.com.co",
+            })
+
+    def test_cada_una_se_encuentra_a_si_misma(self):
+        for nombre, ficha in self.familia.items():
+            with self.subTest(nombre=nombre):
+                self.assertEqual(
+                    self.Evento._buscar_cliente_existente({"name": nombre}),
+                    ficha)
+
+    def test_el_dominio_compartido_no_las_fusiona(self):
+        """El dominio no se usa para emparejar, y es deliberado.
+
+        Varias empresas del mismo grupo comparten dominio, y hasta empresas
+        sin relación comparten uno genérico.
+        """
+        encontrado = self.Evento._buscar_cliente_existente({
+            "name": "ZETAPRUEBA Otra Empresa Del Grupo",
+            "domain": "argos.com.co",
+        })
+        self.assertFalse(encontrado)
+
+    def test_un_nombre_parecido_no_basta(self):
+        """«Argos» a secas no identifica a ninguna de las cinco."""
+        self.assertFalse(
+            self.Evento._buscar_cliente_existente({"name": "ZETAPRUEBA Argos"}))
+
+    def test_la_forma_juridica_no_puede_fusionar_dos_empresas(self):
+        """Una SAS y una LTDA con el mismo nombre son empresas distintas."""
+        self.Partner.create({"name": "ZETAPRUEBA Argos Energia SAS",
+                             "is_company": True})
+        self.Partner.create({"name": "ZETAPRUEBA Argos Energia LTDA",
+                             "is_company": True})
+        self.assertFalse(self.Evento._buscar_cliente_existente(
+            {"name": "ZETAPRUEBA Argos Energia"}))
+
+
+@tagged("post_install", "-at_install")
+class TestContactosNoSeRoban(TransactionCase):
+    """Un buzón compartido no convierte a dos personas en una.
+
+    info@ o ventas@ los usan varias personas de la misma empresa. Sin guarda,
+    el segundo contacto se llevaría la ficha del primero: la restricción de
+    unicidad no lo impide, porque es la misma fila cambiando de valor.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Evento = cls.env["hubspot.webhook.event"]
+        cls.Partner = cls.env["res.partner"]
+
+    def test_una_ficha_ya_vinculada_no_se_adopta_por_correo(self):
+        ya = self.Partner.create({
+            "name": "ZETAPRUEBA Persona Primera",
+            "email": "info@zetaprueba.test",
+            "hubspot_contact_id": "CONTACTO-A",
+        })
+        libre = self.Partner.search([
+            ("email", "=ilike", "info@zetaprueba.test"),
+            ("hubspot_contact_id", "=", False),
+            ("parent_id", "=", False),
+        ])
+        self.assertFalse(libre, "la ficha vinculada no debe salir como libre")
+        ya.invalidate_recordset()
+        self.assertEqual(ya.hubspot_contact_id, "CONTACTO-A")
+
+    def test_dos_fichas_libres_con_el_mismo_correo_no_deciden(self):
+        for n in ("ZETAPRUEBA Libre Uno", "ZETAPRUEBA Libre Dos"):
+            self.Partner.create({"name": n, "email": "ventas@zetaprueba.test"})
+        libres = self.Partner.search([
+            ("email", "=ilike", "ventas@zetaprueba.test"),
+            ("hubspot_contact_id", "=", False),
+            ("parent_id", "=", False),
+        ])
+        self.assertEqual(len(libres), 2)
+
+    def test_dos_fichas_no_pueden_apuntar_al_mismo_contacto(self):
+        """La restricción de la base es la última red."""
+        from psycopg2 import IntegrityError
+        self.Partner.create({
+            "name": "ZETAPRUEBA Vinculada", "hubspot_contact_id": "CONTACTO-Z"})
+        with self.assertRaises(IntegrityError):
+            with self.cr.savepoint():
+                self.Partner.create({
+                    "name": "ZETAPRUEBA Intrusa",
+                    "hubspot_contact_id": "CONTACTO-Z"})
+
+    def test_dos_fichas_no_pueden_apuntar_a_la_misma_empresa(self):
+        from psycopg2 import IntegrityError
+        self.Partner.create({
+            "name": "ZETAPRUEBA Empresa Vinculada", "is_company": True,
+            "hubspot_company_id": "EMPRESA-Z"})
+        with self.assertRaises(IntegrityError):
+            with self.cr.savepoint():
+                self.Partner.create({
+                    "name": "ZETAPRUEBA Empresa Intrusa", "is_company": True,
+                    "hubspot_company_id": "EMPRESA-Z"})

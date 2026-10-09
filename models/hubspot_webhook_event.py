@@ -1238,12 +1238,30 @@ class HubspotWebhookEvent(models.Model):
             correo = (props.get("email") or "").strip()
 
             if correo:
+                # Solo se adopta una ficha que no esté ya vinculada a OTRO
+                # contacto de HubSpot. Un buzón corporativo —info@, ventas@—
+                # lo comparten varias personas, y sin esta guarda el segundo
+                # contacto robaría la ficha del primero: la restricción de
+                # unicidad no lo impide, porque es la misma fila cambiando de
+                # valor. Dos personas distintas son dos fichas distintas.
                 por_correo = Partner.search(
-                    [("email", "=ilike", correo), ("parent_id", "=", False)],
-                    limit=2)
+                    [
+                        ("email", "=ilike", correo),
+                        ("parent_id", "=", False),
+                        ("hubspot_contact_id", "=", False),
+                    ],
+                    limit=2,
+                )
                 if len(por_correo) == 1:
                     por_correo.sudo().write({"hubspot_contact_id": contacto_id})
                     return por_correo
+                if len(por_correo) > 1:
+                    _logger.warning(
+                        "El correo %s está en %s fichas sin vincular; no se "
+                        "adopta ninguna y se crea una nueva.",
+                        correo,
+                        len(por_correo),
+                    )
 
             nombre = " ".join(filter(None, [
                 props.get("firstname"), props.get("lastname")])).strip()
